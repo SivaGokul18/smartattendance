@@ -8,7 +8,8 @@ import {
   BookingSlot, 
   NotificationItem, 
   AdminSettings, 
-  Role 
+  Role,
+  LeaveRequest 
 } from '../types';
 import { 
   initialStudents, 
@@ -18,7 +19,8 @@ import {
   initialTimetable, 
   initialBookings, 
   initialNotifications, 
-  defaultSettings 
+  defaultSettings,
+  initialLeaves 
 } from '../lib/mock-data';
 
 interface AppState {
@@ -72,6 +74,13 @@ interface AppState {
 
   bookings: BookingSlot[];
   addBooking: (slotId: string, studentId: string) => boolean;
+  addBookingSlot: (slot: Omit<BookingSlot, 'id' | 'bookedSeats' | 'studentIds'>) => void;
+  cancelBooking: (slotId: string, studentId: string) => void;
+
+  leaveRequests: LeaveRequest[];
+  addLeaveRequest: (req: Omit<LeaveRequest, 'id' | 'appliedAt' | 'status'>) => void;
+  updateLeaveStatus: (id: string, status: 'approved' | 'rejected', comment?: string) => void;
+  cancelLeaveRequest: (id: string) => void;
 
   notifications: NotificationItem[];
   markNotificationRead: (id: string) => void;
@@ -124,6 +133,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateStudent: (id, updates) =>
     set((state) => ({
       students: state.students.map((s) => (s.id === id ? { ...s, ...updates } : s)),
+      selectedStudent: state.selectedStudent.id === id ? { ...state.selectedStudent, ...updates } : state.selectedStudent,
     })),
   deleteStudent: (id) =>
     set((state) => ({
@@ -216,6 +226,66 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
     return true;
   },
+  addBookingSlot: (newSlot) =>
+    set((state) => ({
+      bookings: [
+        {
+          ...newSlot,
+          id: `book-${Date.now()}`,
+          bookedSeats: 0,
+          studentIds: [],
+        },
+        ...state.bookings,
+      ],
+    })),
+  cancelBooking: (slotId, studentId) =>
+    set((state) => ({
+      bookings: state.bookings.map((b) =>
+        b.id === slotId
+          ? {
+              ...b,
+              bookedSeats: Math.max(0, b.bookedSeats - 1),
+              studentIds: b.studentIds.filter((id) => id !== studentId),
+            }
+          : b
+      ),
+    })),
+
+  leaveRequests: initialLeaves,
+  addLeaveRequest: (req) =>
+    set((state) => ({
+      leaveRequests: [
+        {
+          ...req,
+          id: `leave-${Date.now()}`,
+          appliedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          status: 'pending',
+        },
+        ...state.leaveRequests,
+      ],
+      notifications: [
+        {
+          id: `notif-${Date.now()}`,
+          title: `Leave Application Submitted`,
+          body: `Your ${req.leaveType} application has been routed to your mentor ${req.mentorName}.`,
+          category: 'today',
+          read: false,
+          accentColor: 'indigo',
+          timestamp: 'Just now',
+        },
+        ...state.notifications,
+      ],
+    })),
+  updateLeaveStatus: (id, status, comment) =>
+    set((state) => ({
+      leaveRequests: state.leaveRequests.map((l) =>
+        l.id === id ? { ...l, status, reviewComment: comment || l.reviewComment } : l
+      ),
+    })),
+  cancelLeaveRequest: (id) =>
+    set((state) => ({
+      leaveRequests: state.leaveRequests.filter((l) => l.id !== id),
+    })),
 
   notifications: initialNotifications,
   markNotificationRead: (id) =>

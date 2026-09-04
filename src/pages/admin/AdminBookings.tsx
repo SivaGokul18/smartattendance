@@ -3,16 +3,25 @@ import { Plus, Calendar, List, Search, MapPin, Users, CheckCircle, Clock, X } fr
 import { useAppStore } from '../../store/useAppStore';
 
 export const AdminBookings: React.FC = () => {
-  const { bookings, students, subjects } = useAppStore();
+  const { bookings, students, subjects, faculty, addBooking, addBookingSlot } = useAppStore();
 
   const [viewMode, setViewMode] = useState<'calendar' | 'table'>('calendar');
   const [filterSubject, setFilterSubject] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'new-slot' | 'reserve-student'>('new-slot');
+
+  // New Slot Form state
+  const [slotSubject, setSlotSubject] = useState('');
+  const [slotFaculty, setSlotFaculty] = useState('');
+  const [slotRoom, setSlotRoom] = useState('GPU Cluster Lab 401');
+  const [slotDate, setSlotDate] = useState('2026-09-09');
+  const [slotTime, setSlotTime] = useState('10:00 AM - 12:00 PM');
+  const [slotCapacity, setSlotCapacity] = useState(30);
 
   // New Booking Modal state
   const [studentSearch, setStudentSearch] = useState('');
-  const [selectedStudentId, setSelectedStudentId] = useState(students[0].id);
-  const [selectedBookingId, setSelectedBookingId] = useState(bookings[0].id);
+  const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || '');
+  const [selectedBookingId, setSelectedBookingId] = useState(bookings[0]?.id || '');
 
   const filteredBookings = bookings.filter(
     (b) => filterSubject === 'All' || b.subjectName.includes(filterSubject)
@@ -165,9 +174,11 @@ export const AdminBookings: React.FC = () => {
       {/* New Booking Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md bg-white p-6 border border-slate-200 shadow-2xl rounded-3xl animate-in zoom-in-95 duration-150">
+          <div className="w-full max-w-lg bg-white p-6 border border-slate-200 shadow-2xl rounded-3xl animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <h3 className="font-bold text-slate-900 text-base">Create Student Reservation</h3>
+              <h3 className="font-bold text-slate-900 text-base">
+                {modalMode === 'new-slot' ? 'Create New Lab / Session Slot' : 'Assign Student Reservation'}
+              </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
@@ -176,60 +187,188 @@ export const AdminBookings: React.FC = () => {
               </button>
             </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                alert('Student seat booked successfully!');
-                setIsModalOpen(false);
-              }}
-              className="space-y-4 text-xs"
-            >
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Select Student</label>
-                <select
-                  value={selectedStudentId}
-                  onChange={(e) => setSelectedStudentId(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600 transition"
-                >
-                  {students.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.rollNumber})
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Modal Mode Tabs */}
+            <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-semibold mb-4">
+              <button
+                type="button"
+                onClick={() => setModalMode('new-slot')}
+                className={`flex-1 py-1.5 rounded-lg transition ${
+                  modalMode === 'new-slot' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                + New Lab Slot
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalMode('reserve-student')}
+                className={`flex-1 py-1.5 rounded-lg transition ${
+                  modalMode === 'reserve-student' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Assign Student Seat
+              </button>
+            </div>
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Select Available Session</label>
-                <select
-                  value={selectedBookingId}
-                  onChange={(e) => setSelectedBookingId(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600 transition"
-                >
-                  {bookings.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.subjectName} — {b.date} ({b.totalSeats - b.bookedSeats} seats left)
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {modalMode === 'new-slot' ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!slotSubject.trim()) return;
+                  addBookingSlot({
+                    subjectName: slotSubject.trim(),
+                    facultyName: slotFaculty.trim() || 'Dr. Sarah Jenkins',
+                    room: slotRoom.trim() || 'Innovation Lab 202',
+                    date: slotDate || '2026-09-09',
+                    time: slotTime || '10:00 AM - 12:00 PM',
+                    totalSeats: Number(slotCapacity) || 30
+                  });
+                  setSlotSubject('');
+                  setIsModalOpen(false);
+                }}
+                className="space-y-3 text-xs"
+              >
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Session / Lab Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., Deep Learning Transformers Workshop"
+                    value={slotSubject}
+                    onChange={(e) => setSlotSubject(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600 transition"
+                  />
+                </div>
 
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-full font-medium text-slate-600 hover:bg-slate-100 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-full font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:brightness-110 shadow-md shadow-indigo-600/25 transition active:scale-95"
-                >
-                  Confirm Reservation
-                </button>
-              </div>
-            </form>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Instructor / Faculty</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Dr. Sarah Jenkins"
+                      value={slotFaculty}
+                      onChange={(e) => setSlotFaculty(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600 transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Room / Lab Location</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., GPU Cluster Lab 401"
+                      value={slotRoom}
+                      onChange={(e) => setSlotRoom(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600 transition"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={slotDate}
+                      onChange={(e) => setSlotDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600 transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Time Range</label>
+                    <input
+                      type="text"
+                      placeholder="10:00 AM - 12:00 PM"
+                      value={slotTime}
+                      onChange={(e) => setSlotTime(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600 transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Total Seats</label>
+                    <input
+                      type="number"
+                      min="5"
+                      max="100"
+                      value={slotCapacity}
+                      onChange={(e) => setSlotCapacity(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600 transition"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 rounded-full font-medium text-slate-600 hover:bg-slate-100 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-full font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:brightness-110 shadow-md shadow-indigo-600/25 transition active:scale-95"
+                  >
+                    Publish Available Session
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (selectedBookingId && selectedStudentId) {
+                    addBooking(selectedBookingId, selectedStudentId);
+                  }
+                  setIsModalOpen(false);
+                }}
+                className="space-y-4 text-xs"
+              >
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Select Student</label>
+                  <select
+                    value={selectedStudentId}
+                    onChange={(e) => setSelectedStudentId(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600 transition"
+                  >
+                    {students.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.rollNumber})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Select Available Session</label>
+                  <select
+                    value={selectedBookingId}
+                    onChange={(e) => setSelectedBookingId(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600 transition"
+                  >
+                    {bookings.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.subjectName} — {b.date} ({b.totalSeats - b.bookedSeats} seats left)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 rounded-full font-medium text-slate-600 hover:bg-slate-100 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-full font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:brightness-110 shadow-md shadow-indigo-600/25 transition active:scale-95"
+                  >
+                    Confirm Reservation
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

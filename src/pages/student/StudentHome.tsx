@@ -6,13 +6,11 @@ import {
   ArrowRight, 
   CheckCircle2, 
   ShieldCheck, 
-  Flame, 
   Wifi, 
   Calendar,
   ChevronRight,
-  ScanFace,
-  Download,
-  FileCheck
+  ChevronLeft,
+  ScanFace
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useSessionStore } from '../../store/useSessionStore';
@@ -24,14 +22,23 @@ interface StudentHomeProps {
 export const StudentHome: React.FC<StudentHomeProps> = ({ onMarkAttendance }) => {
   const { selectedStudent } = useAppStore();
   const { activeSession } = useSessionStore();
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(3); // Default: Friday 4 (Today)
+
+  const weekDays = [
+    { id: 'd-1', day: 'TUE', date: 1, fullDate: 'Tuesday, September 1', isToday: false, status: 'present', attendanceText: '3 of 3 Lectures Attended • 100% Verified' },
+    { id: 'd-2', day: 'WED', date: 2, fullDate: 'Wednesday, September 2', isToday: false, status: 'present', attendanceText: '4 of 4 Lectures Attended • 100% Verified' },
+    { id: 'd-3', day: 'THU', date: 3, fullDate: 'Thursday, September 3', isToday: false, status: 'present', attendanceText: '3 of 3 Lectures Attended • 100% Verified' },
+    { id: 'd-4', day: 'FRI', date: 4, fullDate: 'Friday, September 4', isToday: true, status: 'today', attendanceText: 'Today • 3 Enrolled Sessions • Beacon Live' },
+    { id: 'd-5', day: 'SAT', date: 5, fullDate: 'Saturday, September 5', isToday: false, status: 'weekend', attendanceText: 'Weekend Recess • AI Lab Open for Study' },
+    { id: 'd-6', day: 'SUN', date: 6, fullDate: 'Sunday, September 6', isToday: false, status: 'weekend', attendanceText: 'Weekend Recess • University Campus Holiday' },
+    { id: 'd-7', day: 'MON', date: 7, fullDate: 'Monday, September 7', isToday: false, status: 'upcoming', attendanceText: 'Upcoming Schedule • 3 Lectures Scheduled' },
+  ];
+
   const [filter, setFilter] = useState<'all' | 'morning' | 'afternoon'>('all');
-  const [toolkitFeedback, setToolkitFeedback] = useState<string | null>(null);
 
   const isBleSessionLive = activeSession && activeSession.status === 'broadcasting';
   const isAlreadyCheckedIn =
     activeSession && activeSession.checkedInStudentIds.includes(selectedStudent.id);
-
-  const semesterRate = selectedStudent?.attendanceRate || 92;
 
   const timetableCards = [
     {
@@ -72,16 +79,177 @@ export const StudentHome: React.FC<StudentHomeProps> = ({ onMarkAttendance }) =>
     },
   ];
 
-  const filteredSchedule = timetableCards.filter(item => {
+  const scheduleByDay: Record<number, typeof timetableCards> = {
+    // 0: Tue Sep 1
+    0: [
+      {
+        id: 'tt-tue-1',
+        code: 'CS301',
+        name: 'Machine Learning',
+        time: '09:00 AM - 10:00 AM',
+        period: 'morning',
+        room: 'LH-204',
+        wing: 'North Academic Wing, Floor 2',
+        faculty: 'Dr. Sarah Jenkins',
+        active: false,
+        unit: 'Unit 3: Gradient Descent Optimization'
+      },
+      {
+        id: 'tt-tue-2',
+        code: 'CS303',
+        name: 'Database Management Systems',
+        time: '11:15 AM - 12:15 PM',
+        period: 'morning',
+        room: 'LH-101',
+        wing: 'Main Tech Block, Floor 1',
+        faculty: 'Prof. Rajesh Kumar',
+        active: false,
+        unit: 'Unit 4: Transaction Isolation & ACID'
+      },
+      {
+        id: 'tt-tue-3',
+        code: 'CS305',
+        name: 'Computer Networks & Security',
+        time: '02:00 PM - 03:00 PM',
+        period: 'afternoon',
+        room: 'LH-206',
+        wing: 'South Academic Wing, Floor 2',
+        faculty: 'Dr. Elena Rostova',
+        active: false,
+        unit: 'Unit 2: TCP Flow Control & BLE Tokens'
+      }
+    ],
+    // 1: Wed Sep 2
+    1: [
+      {
+        id: 'tt-wed-1',
+        code: 'CS302',
+        name: 'Cloud Computing & DevOps',
+        time: '09:00 AM - 10:00 AM',
+        period: 'morning',
+        room: 'LH-208',
+        wing: 'South Academic Wing, Floor 2',
+        faculty: 'Prof. Mark Davis',
+        active: false,
+        unit: 'Unit 2: Docker Multi-Stage Builds'
+      },
+      {
+        id: 'tt-wed-2',
+        code: 'CS306',
+        name: 'Full-Stack Web Engineering',
+        time: '10:15 AM - 11:15 AM',
+        period: 'morning',
+        room: 'Lab 304',
+        wing: 'Innovation Block, Floor 3',
+        faculty: 'Dr. Anita Roy',
+        active: false,
+        unit: 'Unit 3: Realtime WebSockets & Edge State'
+      },
+      {
+        id: 'tt-wed-3',
+        code: 'CS304',
+        name: 'Embedded IoT & Sensors Lab',
+        time: '01:30 PM - 03:30 PM',
+        period: 'afternoon',
+        room: 'IoT Lab 102',
+        wing: 'Hardware Innovation Block, Floor 1',
+        faculty: 'Dr. Alan Vance',
+        active: false,
+        unit: 'Practical: BLE Advertising & RSSI Filtering'
+      }
+    ],
+    // 2: Thu Sep 3
+    2: [
+      {
+        id: 'tt-thu-1',
+        code: 'CS301',
+        name: 'Machine Learning',
+        time: '09:00 AM - 10:00 AM',
+        period: 'morning',
+        room: 'LH-204',
+        wing: 'North Academic Wing, Floor 2',
+        faculty: 'Dr. Sarah Jenkins',
+        active: false,
+        unit: 'Unit 4: Supervised Classification Foundations'
+      },
+      {
+        id: 'tt-thu-2',
+        code: 'CS303',
+        name: 'Database Management Systems',
+        time: '11:15 AM - 12:15 PM',
+        period: 'morning',
+        room: 'LH-101',
+        wing: 'Main Tech Block, Floor 1',
+        faculty: 'Prof. Rajesh Kumar',
+        active: false,
+        unit: 'Unit 4: Concurrency & B-Tree Indexing'
+      },
+      {
+        id: 'tt-thu-3',
+        code: 'CS307',
+        name: 'Cyber Physical Systems',
+        time: '02:00 PM - 03:30 PM',
+        period: 'afternoon',
+        room: 'LH-205',
+        wing: 'North Academic Wing, Floor 2',
+        faculty: 'Dr. Vikram Seth',
+        active: false,
+        unit: 'Unit 3: Sensor Fusion & Gateway Relays'
+      }
+    ],
+    // 3: Fri Sep 4 (Today)
+    3: timetableCards,
+    // 4: Sat Sep 5 (Weekend)
+    4: [],
+    // 5: Sun Sep 6 (Weekend)
+    5: [],
+    // 6: Mon Sep 7 (Upcoming)
+    6: [
+      {
+        id: 'tt-mon-1',
+        code: 'CS301',
+        name: 'Machine Learning',
+        time: '09:00 AM - 10:00 AM',
+        period: 'morning',
+        room: 'LH-204',
+        wing: 'North Academic Wing, Floor 2',
+        faculty: 'Dr. Sarah Jenkins',
+        active: false,
+        unit: 'Unit 5: Neural Networks & Backpropagation'
+      },
+      {
+        id: 'tt-mon-2',
+        code: 'CS302',
+        name: 'Cloud Computing & DevOps',
+        time: '11:15 AM - 12:15 PM',
+        period: 'morning',
+        room: 'LH-208',
+        wing: 'South Academic Wing, Floor 2',
+        faculty: 'Prof. Mark Davis',
+        active: false,
+        unit: 'Unit 4: Kubernetes Pod Autoscaling'
+      },
+      {
+        id: 'tt-mon-3',
+        code: 'CS304',
+        name: 'Embedded IoT & Sensors Lab',
+        time: '02:00 PM - 04:00 PM',
+        period: 'afternoon',
+        room: 'IoT Lab 102',
+        wing: 'Hardware Innovation Block, Floor 1',
+        faculty: 'Dr. Alan Vance',
+        active: false,
+        unit: 'Practical: BLE Mesh Sensor Telemetry'
+      }
+    ]
+  };
+
+  const currentSchedule = scheduleByDay[selectedDayIndex] ?? timetableCards;
+  const filteredSchedule = currentSchedule.filter(item => {
     if (filter === 'morning') return item.period === 'morning';
     if (filter === 'afternoon') return item.period === 'afternoon';
     return true;
   });
-
-  const handleToolkitAction = (actionName: string) => {
-    setToolkitFeedback(`${actionName} opened successfully.`);
-    setTimeout(() => setToolkitFeedback(null), 3000);
-  };
 
   return (
     <div className="flex-1 p-3.5 sm:p-6 lg:p-8 pb-32 md:pb-8 bg-[#F8FAFC] text-slate-900 overflow-y-auto space-y-6">
@@ -324,179 +492,336 @@ export const StudentHome: React.FC<StudentHomeProps> = ({ onMarkAttendance }) =>
             </p>
           </div>
         </div>
-
-        {/* Feedback Alert Pill */}
-        {toolkitFeedback && (
-          <div className="relative z-10 mt-3 p-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 text-xs flex items-center gap-2 shadow-2xs">
-            <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-            <span className="font-medium">{toolkitFeedback}</span>
-          </div>
-        )}
       </div>
 
       {/* ========================================================
-          2. CLEAN ATTENDANCE METRICS (3 METRICS)
+          7-DAY WEEKLY CALENDAR STRIP (BELOW PROFILE CARD)
+          - Rounded day pills matching the reference design
+          - Friday 4 active by default in vibrant purple with white text & white centered dot
+          - Clean unselected day cards with crisp white background, subtle border & shadow
+          - Interactive day selection with instant contextual status updates
           ======================================================== */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Metric 1: Semester Presence */}
-        <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Semester Quorum</span>
-            <div className="text-2xl font-bold text-slate-900 tracking-tight">{semesterRate}%</div>
-            <div className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-              <CheckCircle2 size={13} />
-              <span>Above 75% Requirement (+17%)</span>
+      <div className="rounded-2xl sm:rounded-3xl bg-[#F2F4FD] border border-slate-200/80 p-3.5 sm:p-5 shadow-xs">
+        {/* Calendar Header: Month + Week + Today Action */}
+        <div className="flex items-center justify-between mb-3.5 px-0.5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center text-[#7052F2] shadow-2xs">
+              <Calendar size={16} />
             </div>
-            <span className="text-[10px] text-slate-400 block">32 of 35 lectures attended</span>
-          </div>
-
-          {/* SVG Circular Ring */}
-          <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
-            <svg className="w-16 h-16 transform -rotate-90">
-              <circle
-                cx="32"
-                cy="32"
-                r="25"
-                stroke="#E2E8F0"
-                strokeWidth="5"
-                fill="transparent"
-              />
-              <circle
-                cx="32"
-                cy="32"
-                r="25"
-                stroke="#2563EB"
-                strokeWidth="5"
-                fill="transparent"
-                strokeDasharray={157}
-                strokeDashoffset={157 - (157 * semesterRate) / 100}
-                strokeLinecap="round"
-              />
-            </svg>
-            <span className="absolute text-xs font-bold text-slate-900">{semesterRate}%</span>
-          </div>
-        </div>
-
-        {/* Metric 2: Attendance Streak */}
-        <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Attendance Streak</span>
-            <div className="text-2xl font-bold text-slate-900 tracking-tight">14 Days Perfect</div>
-            <div className="text-[11px] text-slate-600 font-medium flex items-center gap-1">
-              <Flame size={13} className="text-slate-500" />
-              <span>Top 5% in CSE Department</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight">
+                  September 2026
+                </h3>
+                <span className="text-[11px] font-medium text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200/60 hidden sm:inline-block">
+                  Week 1
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 hidden sm:block">
+                Weekly attendance tracking & lecture roster
+              </p>
             </div>
-            <span className="text-[10px] text-slate-400 block">Consecutive on-time check-ins</span>
           </div>
 
-          <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
-            <Flame size={22} />
-          </div>
-        </div>
-
-        {/* Metric 3: Biometric Profile */}
-        <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Biometric Profile</span>
-            <div className="text-2xl font-bold text-slate-900 tracking-tight">Enrolled & Active</div>
-            <div className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-              <ShieldCheck size={13} />
-              <span>3D RGB-D Anti-Spoof Active</span>
-            </div>
-            <span className="text-[10px] text-slate-400 block">Encrypted hardware token</span>
-          </div>
-
-          <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
-            <ScanFace size={22} />
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================
-          3. CLEAN SPOTLIGHT CURRENT / NEXT CLASS CARD
-          ======================================================== */}
-      <div className="rounded-2xl sm:rounded-3xl bg-white p-5 sm:p-7 border border-slate-200/90 shadow-2xs">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-          {/* Session Details */}
-          <div className="space-y-3 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
-                Current Session
+          <div className="flex items-center gap-2">
+            {selectedDayIndex !== 3 && (
+              <button
+                type="button"
+                onClick={() => setSelectedDayIndex(3)}
+                className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white text-[#7052F2] border border-[#7052F2]/30 hover:bg-[#7052F2]/5 transition cursor-pointer shadow-2xs"
+              >
+                Back to Today
+              </button>
+            )}
+            <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200/80 text-xs shadow-2xs">
+              <span className="px-2 py-0.5 font-bold text-[11px] text-slate-700">
+                7 Days View
               </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 7 Days Row */}
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-3">
+          {weekDays.map((item, idx) => {
+            const isSelected = selectedDayIndex === idx;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSelectedDayIndex(idx)}
+                className={`group flex flex-col items-center justify-center py-3 sm:py-4 px-1 sm:px-2 rounded-2xl sm:rounded-[20px] transition-all duration-200 cursor-pointer select-none ${
+                  isSelected
+                    ? 'bg-[#7052F2] text-white shadow-md shadow-[#7052F2]/30 -translate-y-0.5 ring-2 ring-[#7052F2]/20'
+                    : 'bg-white text-slate-800 border border-slate-100 hover:border-slate-300 hover:bg-slate-50/90 shadow-2xs'
+                }`}
+              >
+                {/* Day Abbreviation */}
+                <span
+                  className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${
+                    isSelected ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'
+                  }`}
+                >
+                  {item.day}
+                </span>
+
+                {/* Date Number */}
+                <span
+                  className={`text-base sm:text-xl font-bold mt-1 ${
+                    isSelected ? 'text-white' : 'text-slate-800'
+                  }`}
+                >
+                  {item.date}
+                </span>
+
+                {/* Dot Indicator under the number (matching reference image) */}
+                <div className="h-2 flex items-center justify-center mt-1 sm:mt-1.5">
+                  {isSelected ? (
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-fade-in" />
+                  ) : item.status === 'present' ? (
+                    <span className="w-1 h-1 rounded-full bg-emerald-500/70" title="Present" />
+                  ) : (
+                    <span className="w-1.5 h-1.5 opacity-0" />
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Selected Day Status Bar */}
+        <div className="mt-3 pt-2.5 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2 text-xs px-1">
+          <div className="flex items-center gap-1.5 text-slate-600">
+            <span className="font-semibold text-slate-900">{weekDays[selectedDayIndex].fullDate}:</span>
+            <span className="text-slate-500">{weekDays[selectedDayIndex].attendanceText}</span>
+          </div>
+
+          {selectedDayIndex === 3 ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+              Active Lecture Day
+            </span>
+          ) : weekDays[selectedDayIndex].status === 'present' ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-white text-emerald-700 border border-emerald-200 shadow-2xs">
+              <CheckCircle2 size={11} className="text-emerald-600" />
+              Verified Present
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-white text-slate-600 border border-slate-200/80 shadow-2xs">
+              {weekDays[selectedDayIndex].status === 'weekend' ? 'Campus Recess' : 'Scheduled'}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ========================================================
+          2. COMPACT LIGHT SPOTLIGHT CURRENT / NEXT CLASS CARD
+          - Light delicate border: border-slate-200/50
+          - Lesser compact size: streamlined padding p-4 sm:p-5, compact pills & badges
+          - Bespoke light RF beacon wave pattern & tech lattice
+          ======================================================== */}
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[#F8FAFE] via-[#FFFFFF] to-[#F1F5FD] border border-slate-200/50 p-4 sm:p-5 shadow-xs transition-all duration-300">
+        {/* Layer 1: Subtle Ambient Radial Soft Glow */}
+        <div 
+          className="absolute -top-10 -right-10 sm:top-0 sm:right-0 w-[200px] sm:w-[280px] h-[160px] sm:h-[200px] pointer-events-none"
+          style={{
+            background: 'radial-gradient(circle at 70% 30%, rgba(99, 102, 241, 0.08) 0%, rgba(56, 189, 248, 0.05) 45%, transparent 70%)'
+          }}
+        />
+
+        {/* Layer 2: Unique Bespoke SVG Background Pattern */}
+        <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+          <svg
+            viewBox="0 0 900 200"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-full h-full object-cover"
+            preserveAspectRatio="none"
+          >
+            <defs>
+              <linearGradient id="spotWaveGradLight" x1="100%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#6366F1" stopOpacity="0.16" />
+                <stop offset="50%" stopColor="#38BDF8" stopOpacity="0.08" />
+                <stop offset="100%" stopColor="#818CF8" stopOpacity="0.01" />
+              </linearGradient>
+
+              <linearGradient id="spotSineGradLight" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.0" />
+                <stop offset="30%" stopColor="#6366F1" stopOpacity="0.10" />
+                <stop offset="70%" stopColor="#8B5CF6" stopOpacity="0.12" />
+                <stop offset="100%" stopColor="#EC4899" stopOpacity="0.0" />
+              </linearGradient>
+
+              <pattern id="spotGridPatternLight" width="22" height="22" patternUnits="userSpaceOnUse">
+                <circle cx="11" cy="11" r="0.9" fill="#6366F1" fillOpacity="0.045" />
+                <path d="M 22 0 L 22 22 M 0 22 L 22 22" fill="none" stroke="#6366F1" strokeWidth="0.4" strokeOpacity="0.018" />
+              </pattern>
+            </defs>
+
+            <rect width="100%" height="100%" fill="url(#spotGridPatternLight)" />
+
+            {/* Dynamic RF Sine Waves */}
+            <path
+              d="M 0 110 Q 150 60, 300 95 T 600 85 T 900 110"
+              fill="none"
+              stroke="url(#spotSineGradLight)"
+              strokeWidth="1.4"
+            />
+            <path
+              d="M 0 125 Q 200 80, 400 115 T 800 100 T 1000 130"
+              fill="none"
+              stroke="url(#spotSineGradLight)"
+              strokeWidth="1.0"
+              strokeDasharray="5 4"
+              opacity="0.5"
+            />
+
+            {/* Radiating Concentric Beacon Waves from Right Beacon Node */}
+            <g transform="translate(780, 80)" stroke="url(#spotWaveGradLight)" fill="none">
+              <circle r="32" strokeWidth="1" strokeOpacity="0.3" />
+              <circle r="68" strokeWidth="1" strokeOpacity="0.22" strokeDasharray="4 4" />
+              <circle r="115" strokeWidth="1.1" strokeOpacity="0.18" />
+              <circle r="170" strokeWidth="0.9" strokeOpacity="0.12" strokeDasharray="6 5" />
+              <circle r="235" strokeWidth="0.8" strokeOpacity="0.08" />
+              <circle r="310" strokeWidth="0.7" strokeOpacity="0.05" strokeDasharray="10 6" />
+            </g>
+
+            {/* Technical Framing Corner Accents */}
+            <path d="M 14 24 L 14 14 L 24 14" stroke="#6366F1" strokeWidth="1.2" strokeOpacity="0.2" strokeLinecap="round" />
+            <path d="M 14 176 L 14 186 L 24 186" stroke="#6366F1" strokeWidth="1.2" strokeOpacity="0.2" strokeLinecap="round" />
+            <circle cx="17" cy="17" r="1" fill="#6366F1" fillOpacity="0.25" />
+          </svg>
+        </div>
+
+        {/* Layer 3: Light Gradient Soft Shield */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: 'linear-gradient(90deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.90) 50%, rgba(255, 255, 255, 0.55) 80%, rgba(255, 255, 255, 0.2) 100%)'
+          }}
+        />
+
+        {/* Foreground Content - Compact Spacing */}
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 sm:gap-5">
+          {/* Session Details */}
+          <div className="space-y-2.5 flex-1 min-w-0">
+            {/* Top Badges Row */}
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-[#6366F1] text-white shadow-2xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                CURRENT SESSION
+              </span>
+
               {isAlreadyCheckedIn ? (
-                <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  <CheckCircle2 size={12} />
-                  ATTENDANCE VERIFIED TODAY
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-slate-200/50 shadow-2xs backdrop-blur-sm">
+                  <CheckCircle2 size={12} className="text-emerald-600" />
+                  VERIFIED TODAY
                 </span>
               ) : isBleSessionLive ? (
-                <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-slate-200/50 shadow-2xs backdrop-blur-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
                   BEACON IN RANGE
                 </span>
               ) : (
-                <span className="px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-slate-50 text-slate-600 border border-slate-200">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-medium bg-white/90 text-slate-700 border border-slate-200/50 shadow-2xs backdrop-blur-sm">
+                  <Radio size={11} className="text-indigo-600" />
                   STANDBY • STARTS AT 09:00 AM
                 </span>
               )}
+
+              {/* Telemetry Tag */}
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono text-indigo-600/70 bg-indigo-50/50 border border-slate-200/40">
+                BLE-5.3 // LH-204
+              </span>
             </div>
 
+            {/* Subject Title & Instructor */}
             <div>
-              <h3 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
                 {isBleSessionLive ? activeSession.subjectName : 'Machine Learning (CS301)'}
               </h3>
-              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                Instructor: <strong className="text-slate-700 font-medium">{isBleSessionLive ? activeSession.facultyName : 'Dr. Sarah Jenkins'}</strong>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                <span>Instructor:</span>
+                <strong className="text-slate-800 font-semibold">
+                  {isBleSessionLive ? activeSession.facultyName : 'Dr. Sarah Jenkins'}
+                </strong>
+                <span className="text-slate-400 hidden sm:inline">• Unit 4: Supervised Classification</span>
               </p>
             </div>
 
             {/* Badges & Coordinates */}
-            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-              <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                <Clock size={13} className="text-slate-500 shrink-0" />
-                <span className="font-mono font-medium text-slate-800">09:00 AM - 10:00 AM</span>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {/* Time */}
+              <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-200/50 shadow-2xs">
+                <div className="w-5 h-5 rounded bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                  <Clock size={11} />
+                </div>
+                <span className="font-mono text-xs font-semibold text-slate-800">09:00 AM - 10:00 AM</span>
               </div>
-              <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                <MapPin size={13} className="text-slate-500 shrink-0" />
-                <span className="font-semibold text-slate-800">{isBleSessionLive ? activeSession.room : 'LH-204'}</span>
-                <span className="text-slate-400 hidden sm:inline">(North Academic Wing)</span>
+
+              {/* Room & Wing */}
+              <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-200/50 shadow-2xs">
+                <div className="w-5 h-5 rounded bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+                  <MapPin size={11} />
+                </div>
+                <span className="font-semibold text-xs text-slate-800">
+                  {isBleSessionLive ? activeSession.room : 'LH-204'}
+                </span>
+                <span className="text-slate-400 hidden sm:inline text-[11px]">(North Wing)</span>
               </div>
-              <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                <ShieldCheck size={13} className="text-slate-500 shrink-0" />
-                <span className="font-medium text-slate-700">Touchless BLE + Face</span>
+
+              {/* Security Verification Protocol */}
+              <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-200/50 shadow-2xs">
+                <div className="w-5 h-5 rounded bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                  <ShieldCheck size={11} />
+                </div>
+                <span className="font-medium text-xs text-emerald-900">Touchless BLE + Face</span>
               </div>
             </div>
           </div>
 
-          {/* Action Button */}
-          <div className="lg:w-68 shrink-0 flex flex-col justify-center">
+          {/* Action / Beacon Status Box - Compact */}
+          <div className="lg:w-64 shrink-0 flex flex-col justify-center">
             {isAlreadyCheckedIn ? (
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1">
-                <div className="flex items-center justify-center gap-1.5 text-emerald-700 font-bold text-sm">
+              <div className="p-3 sm:p-4 rounded-xl bg-white/90 border border-slate-200/50 text-center space-y-1 shadow-2xs backdrop-blur-sm">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto text-emerald-600">
                   <CheckCircle2 size={16} />
-                  <span>Marked Present</span>
                 </div>
-                <p className="text-xs text-slate-500">
-                  Verified today at 09:04 AM via BLE 5.3 & face check.
+                <div className="text-emerald-800 font-bold text-xs sm:text-sm">Marked Present</div>
+                <p className="text-[11px] text-slate-500 leading-tight">
+                  Verified today at 09:04 AM via BLE 5.3.
                 </p>
               </div>
             ) : isBleSessionLive ? (
               <button
                 onClick={onMarkAttendance}
-                className="w-full py-3.5 px-5 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center gap-2.5 shadow-xs active:scale-[0.99] transition cursor-pointer"
+                className="group w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-[#6366F1] to-[#7C3AED] hover:from-[#4F46E5] hover:to-[#6D28D9] flex items-center justify-center gap-2 shadow-sm shadow-indigo-500/20 active:scale-[0.99] transition-all cursor-pointer"
               >
-                <ScanFace size={16} />
-                <span>Mark Attendance Now</span>
-                <ArrowRight size={15} className="ml-auto" />
+                <ScanFace size={16} className="group-hover:scale-110 transition-transform" />
+                <span>Mark Attendance</span>
+                <ArrowRight size={14} className="ml-auto group-hover:translate-x-0.5 transition-transform" />
               </button>
             ) : (
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1">
-                <div className="flex items-center justify-center gap-1.5 text-slate-600 font-semibold text-xs">
-                  <Radio size={14} className="text-slate-400" />
-                  <span>Awaiting Lecture Beacon</span>
+              <div className="p-3 sm:p-3.5 rounded-xl bg-white/85 border border-slate-200/50 text-center space-y-1.5 shadow-2xs backdrop-blur-md relative overflow-hidden group hover:border-slate-300 transition">
+                {/* Micro Antenna Wave Radar */}
+                <div className="w-9 h-9 rounded-xl bg-indigo-50/80 border border-indigo-100/60 flex items-center justify-center mx-auto text-indigo-600 relative">
+                  <Radio size={16} className="relative z-10" />
+                  <span className="absolute inset-0 rounded-xl bg-indigo-400/20 animate-ping" />
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  Faculty transmits in LH-204 at scheduled lecture start.
-                </p>
+
+                <div>
+                  <div className="text-xs font-bold text-slate-900 flex items-center justify-center gap-1">
+                    <span>Awaiting Lecture Beacon</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                    Faculty transmits in LH-204 at start.
+                  </p>
+                </div>
+
+                <div className="pt-1.5 border-t border-slate-100 flex items-center justify-center gap-1 text-[9px] font-mono text-indigo-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                  <span>LISTENING ON 2.4 GHz</span>
+                </div>
               </div>
             )}
           </div>
@@ -504,49 +829,48 @@ export const StudentHome: React.FC<StudentHomeProps> = ({ onMarkAttendance }) =>
       </div>
 
       {/* ========================================================
-          4. TIMETABLE & STUDENT TOOLKIT (2 COLS)
+          3. TIMETABLE SCHEDULE (FULL-WIDTH)
           ======================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* LEFT (7 Cols): Today's Schedule */}
-        <div className="lg:col-span-7 space-y-3.5">
-          <div className="flex items-center justify-between gap-2 px-1">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 tracking-tight">
-                Today's Class Schedule
-              </h3>
-              <p className="text-xs text-slate-500">3 enrolled sessions today</p>
-            </div>
-
-            {/* Filter Pills */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
-              <button
-                onClick={() => setFilter('all')}
-                className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
-                  filter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                All (3)
-              </button>
-              <button
-                onClick={() => setFilter('morning')}
-                className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
-                  filter === 'morning' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Morning
-              </button>
-              <button
-                onClick={() => setFilter('afternoon')}
-                className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
-                  filter === 'afternoon' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Afternoon
-              </button>
-            </div>
+      <div className="space-y-3.5">
+        <div className="flex items-center justify-between gap-2 px-1">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 tracking-tight">
+              Class Schedule
+            </h3>
+            <p className="text-xs text-slate-500">{filteredSchedule.length} enrolled sessions</p>
           </div>
 
-          {/* Cards */}
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+            <button
+              onClick={() => setFilter('all')}
+              className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                filter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All ({currentSchedule.length})
+            </button>
+            <button
+              onClick={() => setFilter('morning')}
+              className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                filter === 'morning' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Morning
+            </button>
+            <button
+              onClick={() => setFilter('afternoon')}
+              className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                filter === 'afternoon' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Afternoon
+            </button>
+          </div>
+        </div>
+
+        {/* Cards */}
+        {filteredSchedule.length > 0 ? (
           <div className="space-y-3">
             {filteredSchedule.map((item) => (
               <div
@@ -606,92 +930,15 @@ export const StudentHome: React.FC<StudentHomeProps> = ({ onMarkAttendance }) =>
               </div>
             ))}
           </div>
-        </div>
-
-        {/* RIGHT (5 Cols): Student Campus Toolkit */}
-        <div className="lg:col-span-5 space-y-3.5">
-          <div className="px-1">
-            <h3 className="text-base font-bold text-slate-900 tracking-tight">
-              Student Campus Toolkit
-            </h3>
-            <p className="text-xs text-slate-500">Quick attendance utilities</p>
-          </div>
-
-          <div className="space-y-2.5">
-            {/* Tool 1: Leave / OD Request */}
-            <div 
-              onClick={() => handleToolkitAction('On-Duty / Medical Leave Portal')}
-              className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs hover:border-slate-300 transition cursor-pointer flex items-start gap-3"
-            >
-              <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
-                <FileCheck size={18} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h5 className="text-xs sm:text-sm font-bold text-slate-900">Request Leave or OD</h5>
-                  <ChevronRight size={14} className="text-slate-400" />
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Submit medical or on-duty slip directly to faculty for quota credit.
-                </p>
-              </div>
-            </div>
-
-            {/* Tool 2: Calibrate 3D Face ID */}
-            <div 
-              onClick={() => handleToolkitAction('3D Biometric Calibration')}
-              className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs hover:border-slate-300 transition cursor-pointer flex items-start gap-3"
-            >
-              <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
-                <ScanFace size={18} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h5 className="text-xs sm:text-sm font-bold text-slate-900">Calibrate 3D Face ID</h5>
-                  <ChevronRight size={14} className="text-slate-400" />
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Update face scan for faster touchless classroom recognition.
-                </p>
-              </div>
-            </div>
-
-            {/* Tool 3: Certificate Download */}
-            <div 
-              onClick={() => handleToolkitAction('Official Attendance Certificate (PDF)')}
-              className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs hover:border-slate-300 transition cursor-pointer flex items-start gap-3"
-            >
-              <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
-                <Download size={18} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h5 className="text-xs sm:text-sm font-bold text-slate-900">Attendance Transcript</h5>
-                  <ChevronRight size={14} className="text-slate-400" />
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Download certified presence transcript for semester audits.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Privacy & Zero-Knowledge Security Badge */}
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldCheck size={16} className="text-emerald-600" />
-                <span className="text-xs font-bold text-slate-900">Zero-Knowledge Biometrics</span>
-              </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                LOCAL HASH • SECURE
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              No raw facial images are stored on university servers. Only local cryptographic embeddings are matched.
+        ) : (
+          <div className="p-8 rounded-2xl bg-white border border-slate-200 text-center space-y-2">
+            <Calendar size={28} className="mx-auto text-slate-400" />
+            <h4 className="text-sm font-bold text-slate-800">No Lectures Scheduled</h4>
+            <p className="text-xs text-slate-500">
+              Campus research labs and library study halls are open today.
             </p>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -12,6 +12,8 @@ export interface Student {
   faceIdStatus: "enrolled" | "pending";
   photoUrl?: string;
   attendanceRate: number; // e.g. 88
+  mentorId?: string;
+  mentorName?: string;
 }
 
 export interface Faculty {
@@ -118,3 +120,27 @@ export interface AdminSettings {
   autoSyncOffline: boolean;
   facultyManualOverrideAllowed: boolean;
 }
+
+export type DaySession = 'FN' | 'AN'; // FN = Forenoon, AN = Afternoon
+
+export interface LeaveRequest {
+  id: string;
+  studentId: string;
+  studentName: string;
+  rollNumber: string;
+  department: string;
+  mentorId: string;
+  mentorName: string;
+  leaveType: 'Medical Leave' | 'On-Duty (OD)' | 'Personal / Emergency' | 'Academic / Conference';
+  startDate: string;
+  startSession?: DaySession;
+  endDate: string;
+  endSession?: DaySession;
+  daysCount?: number;
+  isHalfDay?: boolean;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  appliedAt: string;
+  reviewComment?: string;
+}
+

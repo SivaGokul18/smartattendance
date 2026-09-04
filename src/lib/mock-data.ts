@@ -1,4 +1,4 @@
-import { Student, Faculty, Subject, ClassSection, TimetableSlot, BookingSlot, NotificationItem, AdminSettings } from '../types';
+import { Student, Faculty, Subject, ClassSection, TimetableSlot, BookingSlot, NotificationItem, AdminSettings, LeaveRequest } from '../types';
 
 export const initialStudents: Student[] = [
   {
@@ -13,6 +13,8 @@ export const initialStudents: Student[] = [
     faceIdStatus: 'enrolled',
     photoUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
     attendanceRate: 92,
+    mentorId: 'fac-1',
+    mentorName: 'Dr. Rajesh Kumar',
   },
   {
     id: 'std-2',
@@ -26,6 +28,8 @@ export const initialStudents: Student[] = [
     faceIdStatus: 'enrolled',
     photoUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
     attendanceRate: 96,
+    mentorId: 'fac-1',
+    mentorName: 'Dr. Rajesh Kumar',
   },
   {
     id: 'std-3',
@@ -39,6 +43,8 @@ export const initialStudents: Student[] = [
     faceIdStatus: 'pending',
     photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     attendanceRate: 68,
+    mentorId: 'fac-2',
+    mentorName: 'Prof. Shalini Gupta',
   },
   {
     id: 'std-4',
@@ -52,6 +58,8 @@ export const initialStudents: Student[] = [
     faceIdStatus: 'enrolled',
     photoUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
     attendanceRate: 84,
+    mentorId: 'fac-2',
+    mentorName: 'Prof. Shalini Gupta',
   },
   {
     id: 'std-5',
@@ -65,6 +73,8 @@ export const initialStudents: Student[] = [
     faceIdStatus: 'enrolled',
     photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
     attendanceRate: 72,
+    mentorId: 'fac-1',
+    mentorName: 'Dr. Rajesh Kumar',
   },
   {
     id: 'std-6',
@@ -78,6 +88,8 @@ export const initialStudents: Student[] = [
     faceIdStatus: 'enrolled',
     photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     attendanceRate: 94,
+    mentorId: 'fac-3',
+    mentorName: 'Dr. Vikramaditya Sen',
   },
   {
     id: 'std-7',
@@ -91,6 +103,8 @@ export const initialStudents: Student[] = [
     faceIdStatus: 'enrolled',
     photoUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80',
     attendanceRate: 89,
+    mentorId: 'fac-1',
+    mentorName: 'Dr. Rajesh Kumar',
   },
   {
     id: 'std-8',
@@ -104,6 +118,8 @@ export const initialStudents: Student[] = [
     faceIdStatus: 'pending',
     photoUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop&q=80',
     attendanceRate: 64,
+    mentorId: 'fac-1',
+    mentorName: 'Dr. Rajesh Kumar',
   }
 ];
 
@@ -374,3 +390,46 @@ export const defaultSettings: AdminSettings = {
   autoSyncOffline: true,
   facultyManualOverrideAllowed: true
 };
+
+export const initialLeaves: LeaveRequest[] = [
+  {
+    id: 'leave-1',
+    studentId: 'std-1',
+    studentName: 'Aarav Sharma',
+    rollNumber: '21CS101',
+    department: 'Computer Science',
+    mentorId: 'fac-1',
+    mentorName: 'Dr. Rajesh Kumar',
+    leaveType: 'On-Duty (OD)',
+    startDate: '2026-09-02',
+    startSession: 'FN',
+    endDate: '2026-09-03',
+    endSession: 'AN',
+    daysCount: 2,
+    isHalfDay: false,
+    reason: 'Representing university in National AI Hackathon 2026 at IIT Madras.',
+    status: 'approved',
+    appliedAt: '2026-09-01 09:30 AM',
+    reviewComment: 'Approved for OD quota credit. Keep up the good work.'
+  },
+  {
+    id: 'leave-2',
+    studentId: 'std-1',
+    studentName: 'Aarav Sharma',
+    rollNumber: '21CS101',
+    department: 'Computer Science',
+    mentorId: 'fac-1',
+    mentorName: 'Dr. Rajesh Kumar',
+    leaveType: 'Medical Leave',
+    startDate: '2026-09-07',
+    startSession: 'FN',
+    endDate: '2026-09-07',
+    endSession: 'FN',
+    daysCount: 0.5,
+    isHalfDay: true,
+    reason: 'Clinical appointment and blood test checkup scheduled for forenoon.',
+    status: 'pending',
+    appliedAt: '2026-09-04 11:15 AM'
+  }
+];
+

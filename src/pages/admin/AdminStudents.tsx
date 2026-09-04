@@ -16,7 +16,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { Student } from '../../types';
 
 export const AdminStudents: React.FC = () => {
-  const { students, addStudent, updateStudent, deleteStudent } = useAppStore();
+  const { students, faculty, addStudent, updateStudent, deleteStudent } = useAppStore();
 
   const [search, setSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('All');
@@ -35,6 +35,7 @@ export const AdminStudents: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [faceIdStatus, setFaceIdStatus] = useState<'enrolled' | 'pending'>('enrolled');
+  const [mentorId, setMentorId] = useState(faculty[0]?.id || 'fac-1');
 
   const openAddDrawer = () => {
     setEditingStudent(null);
@@ -47,6 +48,7 @@ export const AdminStudents: React.FC = () => {
     setPhone('+91 98765 00000');
     setPhotoUrl('https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80');
     setFaceIdStatus('enrolled');
+    setMentorId(faculty[0]?.id || 'fac-1');
     setIsDrawerOpen(true);
   };
 
@@ -61,11 +63,14 @@ export const AdminStudents: React.FC = () => {
     setPhone(std.phone);
     setPhotoUrl(std.photoUrl || '');
     setFaceIdStatus(std.faceIdStatus);
+    setMentorId(std.mentorId || faculty[0]?.id || 'fac-1');
     setIsDrawerOpen(true);
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    const selectedFacultyMentor = faculty.find((f) => f.id === mentorId) || faculty[0];
+
     if (editingStudent) {
       updateStudent(editingStudent.id, {
         name,
@@ -77,6 +82,8 @@ export const AdminStudents: React.FC = () => {
         phone,
         photoUrl,
         faceIdStatus,
+        mentorId: selectedFacultyMentor?.id,
+        mentorName: selectedFacultyMentor?.name,
       });
     } else {
       addStudent({
@@ -89,6 +96,8 @@ export const AdminStudents: React.FC = () => {
         phone,
         photoUrl,
         faceIdStatus,
+        mentorId: selectedFacultyMentor?.id,
+        mentorName: selectedFacultyMentor?.name,
       });
     }
     setIsDrawerOpen(false);
@@ -201,6 +210,7 @@ export const AdminStudents: React.FC = () => {
                 <th className="py-3.5 px-4">Email</th>
                 <th className="py-3.5 px-4">Face-ID Status</th>
                 <th className="py-3.5 px-4">Attendance</th>
+                <th className="py-3.5 px-4">Assigned Mentor</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -268,6 +278,10 @@ export const AdminStudents: React.FC = () => {
                           ></div>
                         </div>
                       </div>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="font-semibold text-slate-800">{std.mentorName || 'Dr. Rajesh Kumar'}</div>
+                      <div className="text-[10px] text-indigo-600 font-medium">Designated Mentor</div>
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
@@ -440,6 +454,26 @@ export const AdminStudents: React.FC = () => {
                   <option value="AI & Data Science">AI & Data Science</option>
                   <option value="Information Tech">Information Tech</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Assigned Faculty Mentor (Auto-routed for Leave / OD)
+                </label>
+                <select
+                  value={mentorId}
+                  onChange={(e) => setMentorId(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
+                >
+                  {faculty.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} ({f.department}) — {f.employeeId}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Designated mentor in DB. Student's leave applications are automatically routed here.
+                </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
