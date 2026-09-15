@@ -41,10 +41,10 @@ class Settings(BaseSettings):
     BLE_RSSI_THRESHOLD_DEFAULT: float = -75.0  # dBm
     FACE_CONFIDENCE_THRESHOLD_DEFAULT: float = 85.0  # %
 
-    # Google OAuth 2.0 Credentials
+    # Google OAuth 2.0 Credentials (accepts both Web and Android Client IDs)
     GOOGLE_CLIENT_ID: str = os.getenv(
         "GOOGLE_CLIENT_ID",
-        "652946018589-ncmoasimhfq3ekdkof9vlbkqettnrstm.apps.googleusercontent.com"
+        "652946018589-ncmoasimhfq3ekdkof9vlbkqettnrstm.apps.googleusercontent.com,652946018589-f54vmc1ml3cn0srfki80uat9n57p7s7g.apps.googleusercontent.com"
     )
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     ALLOW_GOOGLE_AUTOPROVISION: bool = os.getenv("ALLOW_GOOGLE_AUTOPROVISION", "true").lower() in ("true", "1", "yes")
