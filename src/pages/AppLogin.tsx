@@ -11,6 +11,7 @@ import {
   Mail
 } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
+import { NativeGoogleAuth, isNativeAndroid } from '../utils/nativeAuth';
 import { useAppStore } from '../store/useAppStore';
 import { authApi } from '../api/client';
 import { ForcePasswordChangeModal } from '../components/auth/ForcePasswordChangeModal';
@@ -219,6 +220,29 @@ export const AppLogin: React.FC = () => {
     }
   };
 
+  // Native Android Google Account Chooser handler
+  const handleNativeGoogleLogin = async () => {
+    setIsLoading(true);
+    setErrors({});
+    try {
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '652946018589-ncmoasimhfq3ekdkof9vlbkqettnrstm.apps.googleusercontent.com';
+      const result = await NativeGoogleAuth.signIn({ clientId });
+      if (result?.idToken) {
+        await handleGoogleSuccess({ credential: result.idToken });
+      }
+    } catch (err: any) {
+      console.warn('Native Google sign-in cancelled or failed:', err);
+      const errMsg = String(err?.message || err || '');
+      if (!errMsg.toLowerCase().includes('cancel') && !errMsg.toLowerCase().includes('12501')) {
+        setErrors({
+          identifier: errMsg || 'Google sign-in was cancelled or failed.',
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen lg:h-screen lg:max-h-screen w-full bg-slate-50 flex flex-col justify-between items-center p-3 sm:p-5 lg:p-6 font-sans selection:bg-teal-600 selection:text-white lg:overflow-hidden">
       {/* Top Header Branding (Centered) */}
@@ -409,17 +433,46 @@ export const AppLogin: React.FC = () => {
 
         {/* Google Workspace Sign-In Button */}
         <div className="flex justify-center w-full min-h-[44px]">
-          <GoogleLogin
-            onSuccess={handleGoogleSuccess}
-            onError={() => {
-              setErrors({ identifier: 'Google sign-in was cancelled or failed.' });
-            }}
-            shape="pill"
-            size="large"
-            width="360"
-            text="continue_with"
-            theme="outline"
-          />
+          {isNativeAndroid() ? (
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={handleNativeGoogleLogin}
+              className="w-full max-w-[360px] h-[44px] flex items-center justify-center gap-3 px-4 rounded-full border border-slate-300 bg-white hover:bg-slate-50 active:bg-slate-100 transition-colors shadow-xs"
+            >
+              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                />
+              </svg>
+              <span className="text-sm font-semibold text-slate-700">Continue with Google</span>
+            </button>
+          ) : (
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => {
+                setErrors({ identifier: 'Google sign-in was cancelled or failed.' });
+              }}
+              shape="pill"
+              size="large"
+              width="360"
+              text="continue_with"
+              theme="outline"
+            />
+          )}
         </div>
       </div>
 
