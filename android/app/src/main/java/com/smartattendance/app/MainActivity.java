@@ -43,6 +43,10 @@ public class MainActivity extends BridgeActivity {
                 cookieManager.setAcceptCookie(true);
                 cookieManager.setAcceptThirdPartyCookies(mainWebView, true);
 
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    mainWebView.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_YES);
+                }
+
                 mainWebView.setWebChromeClient(new BridgeWebChromeClient(this.bridge) {
                     @Override
                     public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
@@ -55,6 +59,10 @@ public class MainActivity extends BridgeActivity {
                         popupSettings.setDomStorageEnabled(true);
                         popupSettings.setDatabaseEnabled(true);
                         popupSettings.setUserAgentString(customUa);
+
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            popupWebView.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_YES);
+                        }
 
                         CookieManager.getInstance().setAcceptCookie(true);
                         CookieManager.getInstance().setAcceptThirdPartyCookies(popupWebView, true);
@@ -71,6 +79,7 @@ public class MainActivity extends BridgeActivity {
                         popupWebView.setWebChromeClient(new WebChromeClient() {
                             @Override
                             public void onCloseWindow(WebView window) {
+                                CookieManager.getInstance().flush();
                                 if (mWebDialog != null && mWebDialog.isShowing()) {
                                     mWebDialog.dismiss();
                                 }
@@ -93,6 +102,7 @@ public class MainActivity extends BridgeActivity {
 
                     @Override
                     public void onCloseWindow(WebView window) {
+                        CookieManager.getInstance().flush();
                         if (mWebDialog != null && mWebDialog.isShowing()) {
                             mWebDialog.dismiss();
                         }
