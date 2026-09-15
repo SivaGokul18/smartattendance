@@ -119,7 +119,7 @@ export const OFFICIAL_ROSTER_ACCOUNTS: RosterAccount[] = [
     name: 'Super Admin Administrator',
     email: 'admin@campus.edu',
     role: 'admin',
-    identifier: 'ADMIN-01',
+    identifier: 'admin',
     department: 'Institutional Administration',
     designationOrSemester: 'Super Administrator',
     mentorOrGroup: 'System Authority',
@@ -130,6 +130,7 @@ export const OFFICIAL_ROSTER_ACCOUNTS: RosterAccount[] = [
 
 export const isAuthorizedRosterEmail = (emailOrId: string): boolean => {
   const clean = emailOrId.trim().toLowerCase();
+  if (clean === 'admin' || clean === 'admin@campus.edu' || clean === 'admin-01') return true;
   return OFFICIAL_ROSTER_ACCOUNTS.some(
     (acc) =>
       acc.email.toLowerCase() === clean ||
@@ -139,6 +140,9 @@ export const isAuthorizedRosterEmail = (emailOrId: string): boolean => {
 
 export const getRosterAccount = (emailOrId: string): RosterAccount | undefined => {
   const clean = emailOrId.trim().toLowerCase();
+  if (clean === 'admin' || clean === 'admin@campus.edu' || clean === 'admin-01') {
+    return OFFICIAL_ROSTER_ACCOUNTS.find((acc) => acc.role === 'admin');
+  }
   return OFFICIAL_ROSTER_ACCOUNTS.find(
     (acc) =>
       acc.email.toLowerCase() === clean ||

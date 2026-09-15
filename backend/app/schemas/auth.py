@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 from pydantic import BaseModel
 
 
@@ -24,7 +24,7 @@ class TokenResponse(BaseModel):
     phone: Optional[str] = None
     rollNumber: Optional[str] = None
     employeeId: Optional[str] = None
-    year: Optional[int] = None
+    year: Optional[Union[int, str]] = None
     section: Optional[str] = None
     attendanceRate: Optional[float] = None
     mentorId: Optional[str] = None
