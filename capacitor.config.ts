@@ -5,7 +5,13 @@ const config: CapacitorConfig = {
   appName: 'Smart Attendance',
   webDir: 'dist',
   server: {
-    androidScheme: 'https'
+    androidScheme: 'https',
+    allowNavigation: [
+      'smart-attendance-backend-f7vl.onrender.com',
+      'accounts.google.com',
+      '*.google.com',
+      '*.googleapis.com'
+    ]
   }
 };
 

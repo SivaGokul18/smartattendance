@@ -1,15 +1,16 @@
 import axios, { AxiosInstance } from 'axios';
 
 // Extract API Base URL from environment (e.g. Render backend URL in production)
-const rawApiUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
-export const API_BASE_URL = rawApiUrl ? `${rawApiUrl}/api/v1` : '/api/v1';
+const rawApiUrl = (import.meta.env.VITE_API_URL || 'https://smart-attendance-backend-f7vl.onrender.com').trim().replace(/\/+$/, '');
+export const API_BASE_URL = rawApiUrl.endsWith('/api/v1') ? rawApiUrl : `${rawApiUrl}/api/v1`;
 
 // Helper to construct WebSocket URL for Render or local
 export const getWebSocketUrl = (path: string = '') => {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  if (rawApiUrl) {
-    const wsProto = rawApiUrl.startsWith('https') ? 'wss' : 'ws';
-    const host = rawApiUrl.replace(/^https?:\/\//, '');
+  const base = rawApiUrl.replace(/\/api\/v1$/, '');
+  if (base) {
+    const wsProto = base.startsWith('https') ? 'wss' : 'ws';
+    const host = base.replace(/^https?:\/\//, '');
     return `${wsProto}://${host}/ws${cleanPath}`;
   }
   const loc = window.location;
