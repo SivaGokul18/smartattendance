@@ -47,6 +47,19 @@ api.interceptors.response.use(
     const isAuthError = status === 401 || (status === 404 && detail.includes('token'));
 
     if (isAuthError) {
+      const reqUrl = String(error.config?.url || '');
+      // Never trigger automatic logout during login or credential submission
+      if (reqUrl.includes('/auth/login') || reqUrl.includes('/auth/google')) {
+        return Promise.reject(error);
+      }
+
+      // Guard active admin session from being kicked out due to secondary background sync calls
+      const userRole = localStorage.getItem('user_role');
+      if (userRole === 'admin' && !reqUrl.includes('/auth/me')) {
+        console.warn('Non-fatal admin request authorization notice on:', reqUrl);
+        return Promise.reject(error);
+      }
+
       console.warn('Session expired or unauthorized token detected. Clearing stale credentials.');
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user_role');

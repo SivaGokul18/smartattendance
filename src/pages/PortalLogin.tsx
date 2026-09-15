@@ -115,7 +115,7 @@ export const PortalLogin: React.FC = () => {
 
       if (authRes.role === 'admin') {
         setRole('admin');
-        setAdminActiveTab('dashboard');
+        setAdminActiveTab('home');
         navigate('/admin');
       } else if (authRes.role === 'faculty') {
         setRole('faculty');
@@ -162,7 +162,7 @@ export const PortalLogin: React.FC = () => {
 
       if (rosterAcc.role === 'admin') {
         setRole('admin');
-        setAdminActiveTab('dashboard');
+        setAdminActiveTab('home');
         navigate('/admin');
       } else if (rosterAcc.role === 'faculty') {
         setRole('faculty');

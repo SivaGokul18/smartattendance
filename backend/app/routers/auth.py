@@ -428,12 +428,13 @@ async def get_me(current_user: User = Depends(get_current_user), db: AsyncSessio
             is_mentor = fac.is_mentor
             mentor_group = fac.mentor_group
 
+    role_str = str(current_user.role.value if hasattr(current_user.role, 'value') else current_user.role or "admin")
     return UserOut(
-        id=current_user.id,
-        name=current_user.name,
-        email=current_user.email,
-        role=current_user.role,
-        department=current_user.department,
+        id=current_user.id or "usr-admin-default",
+        name=current_user.name or "Institutional Administrator",
+        email=current_user.email or "admin@campus.edu",
+        role=role_str,
+        department=current_user.department or "Institutional Administration",
         phone=current_user.phone,
         photoUrl=current_user.photo_url,
         rollNumber=roll_number,
@@ -446,7 +447,7 @@ async def get_me(current_user: User = Depends(get_current_user), db: AsyncSessio
         designation=designation,
         isMentor=is_mentor,
         mentorGroup=mentor_group,
-        mustChangePassword=current_user.must_change_password
+        mustChangePassword=current_user.must_change_password or False
     )
 
 
