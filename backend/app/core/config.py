@@ -47,21 +47,35 @@ class Settings(BaseSettings):
         "652946018589-ncmoasimhfq3ekdkof9vlbkqettnrstm.apps.googleusercontent.com"
     )
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    ALLOW_GOOGLE_AUTOPROVISION: bool = os.getenv("ALLOW_GOOGLE_AUTOPROVISION", "true").lower() in ("true", "1", "yes")
 
     @property
     def DATABASE_URL(self) -> str:
+        # 1. If explicit DATABASE_URL is provided (e.g. Render PostgreSQL or SQLite)
         if self.DATABASE_URL_OVERRIDE:
-            return self.DATABASE_URL_OVERRIDE
-        # Safely assemble async MySQL URL handling special characters like @ in password
-        return URL.create(
-            drivername="mysql+aiomysql",
-            username=self.MYSQL_USER,
-            password=self.MYSQL_PASSWORD,
-            host=self.MYSQL_HOST,
-            port=self.MYSQL_PORT,
-            database=self.MYSQL_DATABASE,
-            query={"charset": "utf8mb4"}
-        ).render_as_string(hide_password=False)
+            url = self.DATABASE_URL_OVERRIDE.strip()
+            if url.startswith("postgres://"):
+                url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
+                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            elif url.startswith("sqlite://") and not url.startswith("sqlite+aiosqlite://"):
+                url = url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+            return url
+
+        # 2. If configured for an external or custom MySQL server
+        if self.MYSQL_HOST and self.MYSQL_HOST not in ("localhost", "127.0.0.1"):
+            return URL.create(
+                drivername="mysql+aiomysql",
+                username=self.MYSQL_USER,
+                password=self.MYSQL_PASSWORD,
+                host=self.MYSQL_HOST,
+                port=self.MYSQL_PORT,
+                database=self.MYSQL_DATABASE,
+                query={"charset": "utf8mb4"}
+            ).render_as_string(hide_password=False)
+
+        # 3. Default to SQLite async database for effortless local or standalone container execution
+        return "sqlite+aiosqlite:///./smart_attendance.db"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

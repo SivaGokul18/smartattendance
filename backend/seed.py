@@ -36,8 +36,9 @@ def ensure_mysql_database_exists():
 
 
 async def seed_database():
-    ensure_mysql_database_exists()
-    print("Beginning Smart Attendance MySQL Schema & Demo Accounts Initialization...")
+    if "mysql" in settings.DATABASE_URL:
+        ensure_mysql_database_exists()
+    print("Beginning Smart Attendance Schema & Demo Accounts Initialization...")
 
     # Create all MySQL tables with InnoDB and utf8mb4
     async with engine.begin() as conn:

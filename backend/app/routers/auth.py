@@ -20,10 +20,14 @@ async def google_login(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db
     Auto-provisions user profile in MySQL if user does not exist.
     """
     try:
+        # Check audience list or single ID if configured
+        raw_client_ids = [c.strip() for c in settings.GOOGLE_CLIENT_ID.split(",") if c.strip()]
+        audience = raw_client_ids[0] if len(raw_client_ids) == 1 else (raw_client_ids if len(raw_client_ids) > 1 else None)
+
         id_info = id_token.verify_oauth2_token(
             req.credential,
             google_requests.Request(),
-            settings.GOOGLE_CLIENT_ID
+            audience=audience
         )
     except ValueError as e:
         raise HTTPException(
@@ -46,15 +50,63 @@ async def google_login(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db
             detail="Google account did not provide a valid email address."
         )
 
-    # 1. Search existing user in MySQL (Strict Excel Roster Restriction)
+    # 1. Search existing user in Database
     stmt = select(User).where(User.email.ilike(google_email))
     user = (await db.execute(stmt)).scalar_one_or_none()
 
+    # 2. If user doesn't exist yet, auto-provision or reject based on settings
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Access Restricted: Google account '{google_email}' is not in the institutional roster. Only authorized emails from the Excel roster may log in."
-        )
+        if settings.ALLOW_GOOGLE_AUTOPROVISION:
+            assigned_role = RoleEnum.STUDENT
+            if req.target_role == "faculty":
+                assigned_role = RoleEnum.FACULTY
+            elif req.target_role == "admin":
+                existing_admins = (await db.execute(select(User).where(User.role == RoleEnum.ADMIN))).scalars().all()
+                assigned_role = RoleEnum.ADMIN if len(existing_admins) == 0 else RoleEnum.STUDENT
+
+            new_user_id = f"usr-{uuid.uuid4().hex[:8]}"
+            user = User(
+                id=new_user_id,
+                name=google_name if google_name != "Google User" else google_email.split('@')[0].replace('.', ' ').title(),
+                email=google_email,
+                password_hash=get_password_hash(uuid.uuid4().hex),
+                role=assigned_role,
+                department="Computer Science and Engineering",
+                photo_url=google_picture,
+                phone=""
+            )
+            db.add(user)
+            await db.flush()
+
+            if assigned_role == RoleEnum.STUDENT:
+                student_profile = Student(
+                    id=f"stu-{uuid.uuid4().hex[:8]}",
+                    user_id=user.id,
+                    roll_number=f"7376{uuid.uuid4().hex[:6].upper()}",
+                    department=user.department,
+                    year="3rd Year",
+                    section="A",
+                    attendance_rate=85.0
+                )
+                db.add(student_profile)
+            elif assigned_role == RoleEnum.FACULTY:
+                faculty_profile = Faculty(
+                    id=f"fac-{uuid.uuid4().hex[:8]}",
+                    user_id=user.id,
+                    employee_id=f"EMP-{uuid.uuid4().hex[:4].upper()}",
+                    department=user.department,
+                    designation="Assistant Professor",
+                    is_mentor=True
+                )
+                db.add(faculty_profile)
+
+            await db.commit()
+            await db.refresh(user)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access Restricted: Google account '{google_email}' is not in the institutional roster. Only authorized emails from the Excel roster may log in."
+            )
 
     updated = False
     if google_name and google_name != "Google User" and user.name != google_name:

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { getWebSocketUrl } from '../api/client';
 
 export interface LiveCheckinEvent {
   type: 'STUDENT_CHECKIN';
@@ -37,10 +38,7 @@ export const useFacultyLiveSession = (
   const connect = useCallback(() => {
     if (!sessionId) return;
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    // Connect through Vite proxy /ws or fallback to port 8000
-    const wsUrl = `${protocol}//${host}/ws/faculty/session/${sessionId}/live`;
+    const wsUrl = getWebSocketUrl(`/faculty/session/${sessionId}/live`);
 
     try {
       const ws = new WebSocket(wsUrl);
@@ -104,9 +102,7 @@ export const useAdminLiveOversight = (onEvent?: (event: LiveSessionEvent) => voi
   const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/admin/live-oversight`;
+    const wsUrl = getWebSocketUrl('/admin/live-oversight');
 
     try {
       const ws = new WebSocket(wsUrl);

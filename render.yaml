@@ -1,0 +1,31 @@
+# Render Infrastructure Blueprint
+# Deploys Managed PostgreSQL Database and FastAPI Backend
+services:
+  - type: web
+    name: smart-attendance-backend
+    env: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smart-attendance-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOW_GOOGLE_AUTOPROVISION
+        value: "true"
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+databases:
+  - name: smart-attendance-db
+    plan: free
+    databaseName: smart_attendance
+    user: attendance_admin

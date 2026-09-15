@@ -1,8 +1,25 @@
 import axios, { AxiosInstance } from 'axios';
 
+// Extract API Base URL from environment (e.g. Render backend URL in production)
+const rawApiUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+export const API_BASE_URL = rawApiUrl ? `${rawApiUrl}/api/v1` : '/api/v1';
+
+// Helper to construct WebSocket URL for Render or local
+export const getWebSocketUrl = (path: string = '') => {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (rawApiUrl) {
+    const wsProto = rawApiUrl.startsWith('https') ? 'wss' : 'ws';
+    const host = rawApiUrl.replace(/^https?:\/\//, '');
+    return `${wsProto}://${host}/ws${cleanPath}`;
+  }
+  const loc = window.location;
+  const wsProto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${wsProto}//${loc.host}/ws${cleanPath}`;
+};
+
 // Create base Axios instance
 export const api: AxiosInstance = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },

@@ -31,6 +31,19 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database initialized successfully.")
 
+    # Automatically initialize demo seed data if database is fresh
+    try:
+        from app.models.user import User, RoleEnum
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as session:
+            admin_user = (await session.execute(select(User).where(User.role == RoleEnum.ADMIN))).scalars().first()
+            if not admin_user:
+                logger.info("Fresh database detected. Auto-seeding initial institutional data...")
+                from seed import seed_database
+                await seed_database()
+    except Exception as e:
+        logger.warning(f"Notice during automatic database seed check: {e}")
+
     logger.info("Starting Live Google Sheet Sync Background Scheduler...")
     scheduler.add_job(scheduled_sheet_sync_job, "interval", minutes=1, id="google_sheet_sync_job")
     scheduler.start()
@@ -54,10 +67,10 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
-# CORS Middleware
+# CORS Middleware: Permissive regex allows Render domains, Vercel, localhost, and mobile webviews with credentials
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=r"^https?:\/\/.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
