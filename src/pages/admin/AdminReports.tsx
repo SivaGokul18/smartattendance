@@ -12,6 +12,14 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
+const getInitials = (name: string) => {
+  const clean = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.)\s+/i, '').trim();
+  const parts = clean.split(' ').filter(Boolean);
+  if (parts.length === 0) return 'ST';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 export const AdminReports: React.FC = () => {
   const { students } = useAppStore();
   const [notifiedStudentId, setNotifiedStudentId] = useState<string | null>(null);
@@ -223,11 +231,9 @@ export const AdminReports: React.FC = () => {
                 <tr key={std.id} className="hover:bg-slate-50 transition">
                   <td className="py-3.5 px-4">
                     <div className="flex items-center gap-2.5">
-                      <img
-                        src={std.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'}
-                        alt=""
-                        className="w-7 h-7 rounded-full object-cover"
-                      />
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-rose-50 to-slate-100 border border-rose-200/80 text-rose-700 flex items-center justify-center text-[10px] font-bold shrink-0 shadow-2xs">
+                        {getInitials(std.name)}
+                      </div>
                       <span className="font-semibold text-slate-900">{std.name}</span>
                     </div>
                   </td>

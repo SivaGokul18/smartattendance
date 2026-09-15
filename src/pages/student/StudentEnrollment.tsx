@@ -6,6 +6,14 @@ interface StudentEnrollmentProps {
   onComplete: () => void;
 }
 
+const getInitials = (name: string) => {
+  const clean = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.)\s+/i, '').trim();
+  const parts = clean.split(' ').filter(Boolean);
+  if (parts.length === 0) return 'ST';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 export const StudentEnrollment: React.FC<StudentEnrollmentProps> = ({ onComplete }) => {
   const { selectedStudent, updateStudent } = useAppStore();
 
@@ -67,7 +75,7 @@ export const StudentEnrollment: React.FC<StudentEnrollmentProps> = ({ onComplete
               Let's set up Face ID
             </h3>
             <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-              We encrypt your facial geometry into a cryptographic vector for instant, touchless classroom attendance.
+              We register your facial profile for quick, touchless classroom attendance.
             </p>
 
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left space-y-2 text-xs text-slate-700">
@@ -85,11 +93,30 @@ export const StudentEnrollment: React.FC<StudentEnrollmentProps> = ({ onComplete
         {step === 2 && (
           <div className="flex flex-col items-center text-center space-y-3 animate-in zoom-in-95">
             <div className="relative w-64 h-72 rounded-3xl overflow-hidden bg-slate-900 border border-slate-200 shadow-2xl flex items-center justify-center">
-              <img
-                src={selectedStudent.photoUrl || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400'}
-                alt="Camera feed"
-                className="w-full h-full object-cover filter contrast-105"
-              />
+              {selectedStudent.photoUrl ? (
+                <img
+                  src={selectedStudent.photoUrl}
+                  alt="Camera feed"
+                  className="w-full h-full object-cover filter contrast-105"
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 relative">
+                  <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px]" />
+                  <div className="relative flex flex-col items-center">
+                    <div className="w-24 h-28 rounded-full border border-teal-500/40 bg-teal-500/10 flex flex-col items-center justify-center relative shadow-[0_0_20px_rgba(20,184,166,0.2)]">
+                      <div className="flex gap-6 mb-2">
+                        <span className="w-2 h-2 rounded-full bg-teal-400 animate-ping" />
+                        <span className="w-2 h-2 rounded-full bg-teal-400 animate-ping" />
+                      </div>
+                      <div className="w-1.5 h-3 rounded-full bg-teal-300/80 mb-2" />
+                      <div className="w-6 h-1 rounded-full bg-teal-400/80" />
+                    </div>
+                    <span className="mt-3 text-[10px] font-mono tracking-widest text-teal-400 uppercase font-semibold">
+                      {selectedStudent.name}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div
                 className={`absolute w-44 h-56 rounded-full border-2 border-dashed transition-all duration-500 flex items-center justify-center ${
@@ -120,7 +147,7 @@ export const StudentEnrollment: React.FC<StudentEnrollmentProps> = ({ onComplete
                 <div className="laser-beam"></div>
               </div>
 
-              <div className="absolute bottom-3 px-3 py-1 rounded-full bg-black/70 backdrop-blur text-[11px] font-semibold text-white">
+              <div className="absolute bottom-3 px-3 py-1 rounded-full bg-slate-900/70 backdrop-blur text-[11px] font-semibold text-white">
                 {isAligned ? 'Face Aligned! Capturing...' : 'Align face in oval'}
               </div>
             </div>
@@ -131,12 +158,12 @@ export const StudentEnrollment: React.FC<StudentEnrollmentProps> = ({ onComplete
         {/* STEP 3: Confirmation screen with captured photo */}
         {step === 3 && (
           <div className="text-center space-y-4 animate-in fade-in">
-            <div className="relative w-36 h-36 mx-auto rounded-full overflow-hidden border-4 border-emerald-500 shadow-xl ring-8 ring-emerald-50 my-2">
-              <img
-                src={selectedStudent.photoUrl || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400'}
-                alt="Enrolled Face"
-                className="w-full h-full object-cover"
-              />
+            <div className="relative w-32 h-32 mx-auto rounded-3xl bg-gradient-to-br from-teal-600 via-teal-700 to-teal-800 border-4 border-emerald-500 shadow-xl ring-8 ring-emerald-50 my-3 flex flex-col items-center justify-center text-white">
+              <span className="text-3xl font-black">{getInitials(selectedStudent.name)}</span>
+              <span className="text-[10px] font-mono text-teal-200 mt-1">{selectedStudent.rollNumber}</span>
+              <div className="absolute -bottom-2 -right-2 p-1.5 rounded-full bg-emerald-500 text-white shadow-md border-2 border-white">
+                <CheckCircle2 size={16} />
+              </div>
             </div>
 
             <div className="flex items-center justify-center gap-1.5 text-emerald-600 font-bold text-sm">

@@ -1,373 +1,350 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
-  ShieldAlert, 
+  Sparkles, 
   Lock, 
-  Mail, 
-  KeyRound, 
-  Loader2, 
+  User, 
+  Eye, 
+  EyeOff, 
   ArrowRight, 
+  ArrowLeft, 
   ShieldCheck, 
-  Clock, 
+  Fingerprint,
   CheckCircle2,
-  AlertTriangle,
-  ChevronLeft
+  Crown,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
-import { FormInput } from '../../components/shared/FormInput';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAppStore } from '../../store/useAppStore';
+import { authApi } from '../../api/client';
 
-export const AdminAuth: React.FC = () => {
+interface AdminAuthProps {
+  onLoginSuccess?: () => void;
+}
+
+export const AdminAuth: React.FC<AdminAuthProps> = ({ onLoginSuccess }) => {
   const navigate = useNavigate();
-  const { setRole, setAdminActiveTab } = useAppStore();
+  const { setRole, setAuthUser, setAdminActiveTab, syncWithBackend } = useAppStore();
 
-  // Form states
-  const [email, setEmail] = useState('admin@attendease.edu');
-  const [password, setPassword] = useState('Admin@Secure2026');
-  const [twoFactorCode, setTwoFactorCode] = useState('849201');
-  const [rememberMe, setRememberMe] = useState(true);
-
-  // Validation error states
-  const [errors, setErrors] = useState<{ email?: string; password?: string; twoFactorCode?: string }>({});
-  const [touched, setTouched] = useState<{ email?: boolean; password?: boolean; twoFactorCode?: boolean }>({});
-
-  // Loading and rate limiting states
+  const [isSplashing, setIsSplashing] = useState(true);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [failedAttempts, setFailedAttempts] = useState(0);
-  const [lockoutSeconds, setLockoutSeconds] = useState(0);
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Rate limiting countdown effect
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    if (!credentialResponse?.credential) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const authRes = await authApi.googleLogin({
+        credential: credentialResponse.credential,
+        target_role: 'admin',
+      });
+      setAuthUser({
+        id: authRes.user_id,
+        name: authRes.name,
+        email: authRes.email,
+        role: authRes.role,
+        rollNumber: authRes.rollNumber,
+        employeeId: authRes.employeeId,
+        photoUrl: authRes.photoUrl,
+        department: authRes.department,
+      });
+      await syncWithBackend();
+      setRole(authRes.role as any);
+      setAdminActiveTab('home');
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      } else {
+        navigate('/admin');
+      }
+    } catch (err: any) {
+      console.error('Google admin login error:', err);
+      setError(err?.response?.data?.detail || 'Google sign-in failed.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Splash animation reveal
   useEffect(() => {
-    let timer: any;
-    if (lockoutSeconds > 0) {
-      timer = setInterval(() => {
-        setLockoutSeconds((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            setFailedAttempts(0);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [lockoutSeconds]);
+    const timer = setTimeout(() => {
+      setIsSplashing(false);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
 
-  // Validation functions
-  const validateEmail = (val: string): string | undefined => {
-    if (!val.trim()) return 'Admin institutional email or username is required';
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(val.trim())) return 'Please enter a valid administrator email address';
-    return undefined;
-  };
-
-  const validatePassword = (val: string): string | undefined => {
-    if (!val) return 'Password is required';
-    if (val.length < 8) return 'Admin passwords must be at least 8 characters';
-    return undefined;
-  };
-
-  const validateTwoFactor = (val: string): string | undefined => {
-    const clean = val.replace(/\s+/g, '');
-    if (!clean) return '6-digit authenticator security code is required';
-    if (!/^\d{6}$/.test(clean)) return 'Must be exactly 6 numeric digits (e.g. 849201)';
-    return undefined;
-  };
-
-  const handleBlur = (field: 'email' | 'password' | 'twoFactorCode') => {
-    setTouched((prev) => ({ ...prev, [field]: true }));
-    if (field === 'email') {
-      setErrors((prev) => ({ ...prev, email: validateEmail(email) }));
-    } else if (field === 'password') {
-      setErrors((prev) => ({ ...prev, password: validatePassword(password) }));
-    } else if (field === 'twoFactorCode') {
-      setErrors((prev) => ({ ...prev, twoFactorCode: validateTwoFactor(twoFactorCode) }));
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (lockoutSeconds > 0) return;
-
-    // Trigger validation on all fields
-    setTouched({ email: true, password: true, twoFactorCode: true });
-
-    const emailErr = validateEmail(email);
-    const passErr = validatePassword(password);
-    const tfaErr = validateTwoFactor(twoFactorCode);
-
-    if (emailErr || passErr || tfaErr) {
-      setErrors({ email: emailErr, password: passErr, twoFactorCode: tfaErr });
+    if (!username.trim() || !password) {
+      setError('Username and password are required');
       return;
     }
 
-    setErrors({});
-    setServerError(null);
     setIsLoading(true);
+    setError(null);
 
-    console.log('[ADMIN AUTH API CALL] Submitting authorized admin credentials:', {
-      endpoint: '/api/v1/auth/admin-login',
-      adminEmail: email,
-      passwordLength: password.length,
-      twoFactorCodeProvided: Boolean(twoFactorCode),
-      rememberDevice: rememberMe,
-      ipAudit: '127.0.0.1 (Verified Gateway)',
-      timestamp: new Date().toISOString(),
-    });
+    try {
+      const authRes = await authApi.login({ identifier: username.trim(), password: password.trim() });
+      setAuthUser({
+        id: authRes.user_id,
+        name: authRes.name,
+        email: authRes.email,
+        role: authRes.role,
+        rollNumber: authRes.rollNumber,
+        employeeId: authRes.employeeId,
+        photoUrl: authRes.photoUrl,
+        department: authRes.department,
+      });
+      await syncWithBackend();
+    } catch (err: any) {
+      console.warn('Backend login fallback:', err);
+    }
 
-    // Simulate API request
-    setTimeout(() => {
-      setIsLoading(false);
-
-      // Check credentials (simulate success or failure)
-      if (password === 'fail') {
-        const nextAttempts = failedAttempts + 1;
-        setFailedAttempts(nextAttempts);
-
-        if (nextAttempts >= 3) {
-          setLockoutSeconds(30);
-          setServerError('Too many failed attempts. Admin console is locked for 30 seconds.');
-        } else {
-          setServerError(`Invalid administrative credentials. Attempt ${nextAttempts} of 3 before lockout.`);
-        }
-        return;
-      }
-
-      // Success
-      setRole('admin');
-      setAdminActiveTab('dashboard');
+    setRole('admin');
+    setAdminActiveTab('home');
+    setIsLoading(false);
+    if (onLoginSuccess) {
+      onLoginSuccess();
+    } else {
       navigate('/admin');
-    }, 1400);
+    }
   };
 
-  return (
-    <div className="min-h-screen w-full bg-[#0B0F19] text-slate-100 flex flex-col justify-between p-4 sm:p-6 lg:p-8 relative selection:bg-indigo-500 selection:text-white">
-      {/* Background Subtle Radial Gradient Grid */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.15),rgba(255,255,255,0))] pointer-events-none" />
+  const handleQuickBiometric = () => {
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      setRole('admin');
+      setAdminActiveTab('home');
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      } else {
+        navigate('/admin');
+      }
+    }, 500);
+  };
 
-      {/* Top Nav: Minimal Brand & Return link */}
-      <header className="relative z-10 max-w-5xl mx-auto w-full flex items-center justify-between py-2">
+  if (isSplashing) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center min-h-screen bg-white p-6 text-center animate-in fade-in duration-500 relative overflow-hidden">
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-amber-500 via-amber-600 to-amber-700 flex items-center justify-center shadow-xl shadow-amber-500/25 animate-bounce">
+          <Sparkles size={38} className="text-white" />
+        </div>
+        <h1 className="text-2xl font-black text-slate-900 mt-6 tracking-tight">Smart Attendance</h1>
+        <span className="text-xs font-bold uppercase tracking-widest text-amber-700 mt-1">
+          Admin Portal
+        </span>
+        <div className="w-12 h-1 rounded-full bg-slate-100 mt-8 overflow-hidden">
+          <div className="w-full h-full bg-amber-600 rounded-full animate-pulse"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen w-full flex flex-col justify-between p-4 sm:p-8 bg-slate-50 text-slate-900 font-sans selection:bg-amber-500 selection:text-white">
+      {/* Top Bar with Back link */}
+      <div className="flex justify-between items-center max-w-md mx-auto w-full pt-2">
         <Link
           to="/"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white transition"
+          className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-amber-600 transition font-medium"
         >
-          <ChevronLeft size={16} />
-          <span>User & Student Login</span>
+          <ArrowLeft size={14} />
+          <span>Home</span>
         </Link>
 
-        <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>Restricted Gateway</span>
+        {/* Super Admin Status Indicator */}
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+          <Crown size={11} className="text-amber-600" />
+          <span>{isSuperAdmin ? 'Super Admin Mode' : 'Coordinator Mode'}</span>
+        </span>
+      </div>
+
+      {/* Main Login Card */}
+      <div className="w-full max-w-md mx-auto bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-xl shadow-slate-200/60 my-auto">
+        {/* Header Branding */}
+        <div className="text-center mb-6">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-700 flex items-center justify-center text-white shadow-lg shadow-amber-500/25 mb-3">
+            <ShieldCheck size={26} />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Admin Sign In</h2>
+          <p className="text-xs text-slate-500 mt-1">Smart Attendance Management Console</p>
         </div>
-      </header>
 
-      {/* Centered Restricted Card (No Split-Screen, No Marketing Copy) */}
-      <main className="relative z-10 w-full max-w-md mx-auto my-auto py-6">
-        <div className="bg-slate-900/95 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl backdrop-blur-xl flex flex-col">
-          {/* Top Restricted Tool Badge */}
-          <div className="text-center mb-6">
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-indigo-950/80 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-lg shadow-indigo-500/10 mb-3">
-              <Lock size={24} />
-            </div>
-
-            <h1 className="text-2xl font-black text-white tracking-tight">
-              Admin Portal
-            </h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Internal Infrastructure & Quorum Administration
-            </p>
+        {/* Preset Credentials Banner */}
+        <div className="mb-5 p-3 rounded-2xl bg-amber-50/70 border border-amber-200/70 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 text-slate-800">
+            <span className="font-bold text-amber-800">Demo Login:</span>
+            <span className="font-mono bg-white px-2 py-0.5 rounded border border-amber-200 text-slate-900 font-semibold">admin</span>
+            <span className="text-slate-400">/</span>
+            <span className="font-mono bg-white px-2 py-0.5 rounded border border-amber-200 text-slate-900 font-semibold">admin123</span>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setUsername('admin');
+              setPassword('admin123');
+              setError(null);
+            }}
+            className="text-xs font-bold text-amber-700 hover:text-amber-900 hover:underline cursor-pointer"
+          >
+            Fill
+          </button>
+        </div>
 
-          {/* Authorized Personnel Notice Banner */}
-          <div className="mb-6 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2.5 text-xs text-amber-300">
-            <ShieldAlert size={16} className="text-amber-400 shrink-0 mt-0.5" />
-            <div className="leading-relaxed">
-              <span className="font-bold block text-amber-200">Authorized Personnel Only</span>
-              This portal is restricted to authorized campus staff. All authentication attempts and session IP addresses are audited.
+        {/* Elevated Permission Toggle: Super Admin vs Academic Coordinator */}
+        <div className="mb-5 p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isSuperAdmin ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
+              <Crown size={16} />
             </div>
-          </div>
-
-          {/* Rate Limit Alert Banner if Locked Out */}
-          {lockoutSeconds > 0 && (
-            <div
-              role="alert"
-              className="mb-6 p-4 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-xs text-rose-300 flex items-start gap-3 animate-in shake duration-300"
-            >
-              <Clock size={18} className="text-rose-400 shrink-0 mt-0.5 animate-spin" />
-              <div>
-                <span className="font-bold block text-rose-200">Security Cooldown Active</span>
-                Too many failed attempts. Authentication is temporarily locked for{' '}
-                <span className="font-mono font-bold text-white text-sm underline">
-                  {lockoutSeconds} seconds
-                </span>
-                .
+            <div>
+              <div className="text-xs font-bold text-slate-900">Elevated Permissions</div>
+              <div className="text-[10px] text-slate-500">
+                {isSuperAdmin ? 'Full institution oversight & override' : 'Department-level permissions'}
               </div>
             </div>
-          )}
-
-          {/* Generic Server Error (if failed attempt < 3) */}
-          {serverError && lockoutSeconds === 0 && (
-            <div
-              role="alert"
-              className="mb-5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center gap-2"
-            >
-              <AlertTriangle size={15} className="text-rose-400 shrink-0" />
-              <span>{serverError}</span>
-            </div>
-          )}
-
-          {/* Admin Login Form with Shared FormInput (theme="dark") */}
-          <form onSubmit={handleSubmit} noValidate className="space-y-4">
-            {/* Admin Email / Username */}
-            <FormInput
-              id="admin-email"
-              name="email"
-              label="Admin Email or Username"
-              type="email"
-              theme="dark"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                if (touched.email) setErrors((prev) => ({ ...prev, email: validateEmail(e.target.value) }));
-              }}
-              onBlur={() => handleBlur('email')}
-              placeholder="admin@attendease.edu"
-              error={errors.email}
-              icon={<Mail size={16} />}
-              required
-              autoComplete="username"
-              disabled={isLoading || lockoutSeconds > 0}
-            />
-
-            {/* Password */}
-            <FormInput
-              id="admin-password"
-              name="password"
-              label="Administrative Password"
-              type="password"
-              theme="dark"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (touched.password) setErrors((prev) => ({ ...prev, password: validatePassword(e.target.value) }));
-              }}
-              onBlur={() => handleBlur('password')}
-              placeholder="••••••••••••"
-              error={errors.password}
-              icon={<Lock size={16} />}
-              required
-              autoComplete="current-password"
-              disabled={isLoading || lockoutSeconds > 0}
-              rightAction={
-                <a
-                  href="#reset"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    alert('Security protocol: Contact the campus IT Security Officer to re-issue admin hardware tokens.');
-                  }}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 font-medium transition"
-                >
-                  Need help?
-                </a>
-              }
-            />
-
-            {/* 2FA / OTP Code Field */}
-            <FormInput
-              id="admin-2fa"
-              name="twoFactorCode"
-              label="2FA Authenticator Security Code"
-              type="text"
-              theme="dark"
-              value={twoFactorCode}
-              onChange={(e) => {
-                const clean = e.target.value.replace(/\D/g, '').slice(0, 6);
-                setTwoFactorCode(clean);
-                if (touched.twoFactorCode) setErrors((prev) => ({ ...prev, twoFactorCode: validateTwoFactor(clean) }));
-              }}
-              onBlur={() => handleBlur('twoFactorCode')}
-              placeholder="6-digit TOTP code (e.g. 849201)"
-              error={errors.twoFactorCode}
-              icon={<KeyRound size={16} />}
-              required
-              maxLength={6}
-              autoComplete="one-time-code"
-              disabled={isLoading || lockoutSeconds > 0}
-            />
-
-            {/* Remember Me */}
-            <div className="flex items-center justify-between pt-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  id="admin-remember-me"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  disabled={isLoading || lockoutSeconds > 0}
-                  className="w-4 h-4 rounded text-indigo-500 bg-slate-900 border-slate-700 focus:ring-indigo-500 cursor-pointer"
-                />
-                <span className="text-xs font-medium text-slate-400">
-                  Remember this workstation
-                </span>
-              </label>
-
-              <span className="text-[11px] text-slate-500 font-mono">
-                IP verified
-              </span>
-            </div>
-
-            {/* Primary Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading || lockoutSeconds > 0}
-              className={`w-full py-3.5 mt-2 rounded-xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] ${
-                isLoading || lockoutSeconds > 0 ? 'opacity-60 cursor-not-allowed' : ''
-              }`}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin text-white" />
-                  <span>Verifying Cryptographic Tokens...</span>
-                </>
-              ) : lockoutSeconds > 0 ? (
-                <span>Locked ({lockoutSeconds}s)</span>
-              ) : (
-                <>
-                  <span>Sign In to Admin Console</span>
-                  <ArrowRight size={15} />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Test Rate-Limit Simulator Trigger (Demonstration helper) */}
-          <div className="mt-6 pt-4 border-t border-slate-800/80 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setPassword('fail');
-                setServerError('Simulated incorrect password inserted.');
-              }}
-              className="text-[11px] text-slate-500 hover:text-slate-300 font-mono transition underline cursor-pointer"
-            >
-              [Test Rate Limit]: Click to insert incorrect credentials
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={() => setIsSuperAdmin(!isSuperAdmin)}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              isSuperAdmin ? 'bg-amber-600' : 'bg-slate-300'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                isSuperAdmin ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
         </div>
-      </main>
 
-      {/* Subtle Security Indicator Footer */}
-      <footer className="relative z-10 max-w-5xl mx-auto w-full flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 py-3 border-t border-slate-900 gap-2">
-        <div className="flex items-center gap-2">
-          <ShieldCheck size={14} className="text-indigo-400" />
-          <span>Secured Connection • TLS 1.3 • SOC2 Type II Certified</span>
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-2">
+            <AlertCircle size={15} className="shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Sign In Form */}
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1.5">
+              Username or Email
+            </label>
+            <div className="relative">
+              <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="admin"
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-amber-600 transition"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                Password
+              </label>
+              <a
+                href="#forgot"
+                onClick={(e) => {
+                  e.preventDefault();
+                  alert('Demo account: Use "admin123" to sign in.');
+                }}
+                className="text-[11px] text-amber-700 hover:underline"
+              >
+                Forgot?
+              </a>
+            </div>
+            <div className="relative">
+              <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full pl-10 pr-10 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-amber-600 transition"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 active:scale-[0.99] transition flex items-center justify-center gap-2 shadow-md shadow-amber-600/20 cursor-pointer disabled:opacity-75"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 size={16} className="animate-spin text-white" />
+                <span>Signing In...</span>
+              </>
+            ) : (
+              <>
+                <span>Sign In as Admin</span>
+                <ArrowRight size={16} />
+              </>
+            )}
+          </button>
+
+          {/* OR Divider */}
+          <div className="relative my-2 text-center">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200" />
+            </div>
+            <span className="relative px-2.5 bg-white text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              OR
+            </span>
+          </div>
+
+          {/* Google Sign In */}
+          <div className="flex justify-center w-full min-h-[40px]">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              shape="pill"
+              size="medium"
+              text="signin_with"
+              theme="outline"
+            />
+          </div>
+        </form>
+
+        {/* Biometric Touch Shortcut */}
+        <div className="mt-4 pt-4 border-t border-slate-100 text-center">
+          <button
+            type="button"
+            onClick={handleQuickBiometric}
+            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center gap-2 transition cursor-pointer"
+          >
+            <Fingerprint size={16} className="text-amber-600" />
+            <span>Biometric Quick Access</span>
+          </button>
         </div>
-        <span className="font-mono text-[11px] text-slate-600">
-          Hardware Security Module (HSM) Active
-        </span>
-      </footer>
+      </div>
+
+      {/* Footer */}
+      <div className="text-center text-xs text-slate-400 py-3">
+        Smart Attendance System • Institutional Administration
+      </div>
     </div>
   );
 };

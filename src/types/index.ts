@@ -14,6 +14,7 @@ export interface Student {
   attendanceRate: number; // e.g. 88
   mentorId?: string;
   mentorName?: string;
+  semester?: string;
 }
 
 export interface Faculty {
@@ -26,7 +27,11 @@ export interface Faculty {
   subjects: string[];
   active: boolean;
   photoUrl?: string;
+  designation?: string;
+  isMentor?: boolean;
+  mentorGroup?: string;
 }
+
 
 export interface Subject {
   id: string;
@@ -58,6 +63,10 @@ export interface TimetableSlot {
   classSectionId: string;
   room: string;
   color?: string;
+  subjectName?: string;
+  subjectCode?: string;
+  facultyName?: string;
+  classSectionName?: string;
 }
 
 export interface BleSession {
@@ -144,3 +153,24 @@ export interface LeaveRequest {
   reviewComment?: string;
 }
 
+export interface FacultyLeaveRequest {
+  id: string;
+  facultyId: string;
+  facultyName: string;
+  employeeId: string;
+  department: string;
+  leaveType: 'Casual Leave' | 'Medical Leave' | 'On-Duty (OD)' | 'Academic / Conference' | 'Special Leave';
+  startDate: string;
+  startSession: DaySession;
+  endDate: string;
+  endSession: DaySession;
+  daysCount: number;
+  isHalfDay?: boolean;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  appliedAt: string;
+  substituteFacultyId?: string;
+  substituteFacultyName?: string;
+  affectedSubjects?: string[];
+  reviewComment?: string;
+}

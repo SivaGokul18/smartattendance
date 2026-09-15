@@ -1,43 +1,54 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
-  User, 
   Lock, 
   Eye, 
   EyeOff, 
   ArrowRight, 
   Loader2, 
   AlertCircle,
-  ScanFace
+  ScanFace,
+  Mail
 } from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAppStore } from '../store/useAppStore';
+import { authApi } from '../api/client';
+import { ForcePasswordChangeModal } from '../components/auth/ForcePasswordChangeModal';
+import { getRosterAccount } from '../lib/rosterAccounts';
+
+interface FormErrors {
+  identifier?: string;
+  password?: string;
+}
 
 export const AppLogin: React.FC = () => {
   const navigate = useNavigate();
-  const { setRole } = useAppStore();
+  const { setRole, setAuthUser, syncWithBackend } = useAppStore();
 
-  // Form states (Student: student/student123, Faculty: faculty/faculty123)
-  const [identifier, setIdentifier] = useState('student');
-  const [password, setPassword] = useState('student123');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-
-  // Validation error states
-  const [errors, setErrors] = useState<{ identifier?: string; password?: string }>({});
-  const [touched, setTouched] = useState<{ identifier?: boolean; password?: boolean }>({});
   const [isLoading, setIsLoading] = useState(false);
 
-  // Validation functions
+  // Validation states
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [touched, setTouched] = useState({ identifier: false, password: false });
+  const [isForcePasswordOpen, setIsForcePasswordOpen] = useState(false);
+  const [pendingRole, setPendingRole] = useState<'admin' | 'faculty' | 'student' | null>(null);
+
+  // Validation rules
   const validateIdentifier = (val: string): string | undefined => {
-    if (!val.trim()) return 'Username, Roll No, or Faculty ID is required';
+    if (!val.trim()) return 'Institutional Email ID is required';
     return undefined;
   };
 
   const validatePassword = (val: string): string | undefined => {
     if (!val) return 'Password is required';
-    if (val.length < 6) return 'Password must be at least 6 characters';
+    if (val.length < 4) return 'Password must be at least 4 characters';
     return undefined;
   };
 
+  // Blur validation
   const handleBlur = (field: 'identifier' | 'password') => {
     setTouched((prev) => ({ ...prev, [field]: true }));
     if (field === 'identifier') {
@@ -48,7 +59,7 @@ export const AppLogin: React.FC = () => {
   };
 
   // Form submission handler
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     setTouched({ identifier: true, password: true });
@@ -60,91 +71,172 @@ export const AppLogin: React.FC = () => {
       return;
     }
 
-    const lowerId = identifier.trim().toLowerCase();
-    const inputPass = password.trim();
+    setErrors({});
+    setIsLoading(true);
 
-    // 1. Student Check: student / student123
-    if (lowerId === 'student' || lowerId === '2026cs101' || lowerId === 'student@campus.edu') {
-      if (inputPass !== 'student123') {
-        setErrors({ password: 'Incorrect password for Student (Use: student123)' });
+    try {
+      // Connect to real backend API
+      const authRes = await authApi.login({ identifier: identifier.trim(), password: password.trim() });
+      setAuthUser({
+        id: authRes.user_id,
+        name: authRes.name,
+        email: authRes.email,
+        role: authRes.role,
+        rollNumber: authRes.rollNumber,
+        employeeId: authRes.employeeId,
+        phone: authRes.phone,
+        year: authRes.year,
+        section: authRes.section,
+        attendanceRate: authRes.attendanceRate,
+        mentorId: authRes.mentorId,
+        mentorName: authRes.mentorName,
+        designation: authRes.designation,
+        isMentor: authRes.isMentor,
+        mentorGroup: authRes.mentorGroup,
+        photoUrl: authRes.photoUrl,
+        mustChangePassword: authRes.mustChangePassword,
+      });
+      await syncWithBackend();
+
+      if (authRes.mustChangePassword) {
+        setPendingRole(authRes.role);
+        setIsForcePasswordOpen(true);
         return;
       }
-      setErrors({});
-      setIsLoading(true);
-      setTimeout(() => {
-        setIsLoading(false);
-        setRole('student');
-        navigate('/student');
-      }, 700);
-      return;
-    }
 
-    // 2. Faculty Check: faculty / faculty123
-    if (lowerId === 'faculty' || lowerId.includes('fac') || lowerId.includes('prof') || lowerId === 'faculty@campus.edu') {
-      if (inputPass !== 'faculty123') {
-        setErrors({ password: 'Incorrect password for Faculty (Use: faculty123)' });
-        return;
-      }
-      setErrors({});
-      setIsLoading(true);
-      setTimeout(() => {
-        setIsLoading(false);
-        setRole('faculty');
-        navigate('/faculty');
-      }, 700);
-      return;
-    }
-
-    // 3. Admin Check: admin / admin123
-    if (lowerId === 'admin' || lowerId === 'admin@campus.edu') {
-      if (inputPass !== 'admin123') {
-        setErrors({ password: 'Incorrect password for Admin (Use: admin123)' });
-        return;
-      }
-      setErrors({});
-      setIsLoading(true);
-      setTimeout(() => {
-        setIsLoading(false);
+      if (authRes.role === 'admin') {
         setRole('admin');
         navigate('/admin');
-      }, 700);
-      return;
-    }
+      } else if (authRes.role === 'faculty') {
+        setRole('faculty');
+        navigate('/faculty');
+      } else {
+        setRole('student');
+        navigate('/student');
+      }
+    } catch (err: any) {
+      console.warn('Backend login attempt returned error or offline:', err);
+      const serverDetail = err?.response?.data?.detail;
 
-    // Unrecognized username
-    setErrors({
-      identifier: 'Unrecognized user. Use "student" or "faculty"',
-    });
+      // If backend returned a clear rejection (e.g. 403 Access Restricted or 401 Incorrect password)
+      if (serverDetail) {
+        setErrors({ identifier: serverDetail });
+        return;
+      }
+
+      // Offline fallback: Strictly check against official Excel roster accounts
+      const rosterAcc = getRosterAccount(identifier);
+      if (!rosterAcc) {
+        setErrors({
+          identifier:
+            'Access Restricted: This email ID is not registered in the institutional Excel roster. Only authorized accounts from the Excel roster are permitted to log in.',
+        });
+        return;
+      }
+
+      if (rosterAcc.password !== password.trim()) {
+        setErrors({
+          password: 'Incorrect password for this institutional roster account.',
+        });
+        return;
+      }
+
+      // Successful offline roster match
+      setAuthUser({
+        name: rosterAcc.name,
+        email: rosterAcc.email,
+        role: rosterAcc.role,
+        rollNumber: rosterAcc.role === 'student' ? rosterAcc.identifier : undefined,
+        employeeId: rosterAcc.role === 'faculty' ? rosterAcc.identifier : undefined,
+        department: rosterAcc.department,
+        phone: rosterAcc.phone,
+        designation: rosterAcc.role === 'faculty' ? rosterAcc.designationOrSemester : undefined,
+        section: rosterAcc.role === 'student' ? 'A' : undefined,
+      });
+
+      if (rosterAcc.role === 'admin') {
+        setRole('admin');
+        navigate('/admin');
+      } else if (rosterAcc.role === 'faculty') {
+        setRole('faculty');
+        navigate('/faculty');
+      } else {
+        setRole('student');
+        navigate('/student');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Google SSO simulated login
-  const handleGoogleLogin = () => {
+  // Google SSO authentication handler
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    if (!credentialResponse?.credential) return;
     setIsLoading(true);
-    setTimeout(() => {
+    setErrors({});
+    try {
+      const targetRole = identifier.toLowerCase().includes('fac') ? 'faculty' : 'student';
+      const authRes = await authApi.googleLogin({
+        credential: credentialResponse.credential,
+        target_role: targetRole,
+      });
+      setAuthUser({
+        id: authRes.user_id,
+        name: authRes.name,
+        email: authRes.email,
+        role: authRes.role,
+        rollNumber: authRes.rollNumber,
+        employeeId: authRes.employeeId,
+        phone: authRes.phone,
+        year: authRes.year,
+        section: authRes.section,
+        attendanceRate: authRes.attendanceRate,
+        mentorId: authRes.mentorId,
+        mentorName: authRes.mentorName,
+        designation: authRes.designation,
+        isMentor: authRes.isMentor,
+        mentorGroup: authRes.mentorGroup,
+        photoUrl: authRes.photoUrl,
+      });
+      await syncWithBackend();
+      if (authRes.role === 'admin') {
+        setRole('admin');
+        navigate('/admin');
+      } else if (authRes.role === 'faculty') {
+        setRole('faculty');
+        navigate('/faculty');
+      } else {
+        setRole('student');
+        navigate('/student');
+      }
+    } catch (err: any) {
+      console.error('Google Sign-In failed:', err);
+      setErrors({
+        identifier: err?.response?.data?.detail || 'Google sign-in access restricted. Email must exist in institutional roster.',
+      });
+    } finally {
       setIsLoading(false);
-      setRole('student');
-      navigate('/student');
-    }, 700);
+    }
   };
 
   return (
-    <div className="min-h-screen lg:h-screen lg:max-h-screen w-full bg-white flex flex-col justify-between items-center p-3 sm:p-5 lg:p-6 font-sans selection:bg-[#0B4A3A] selection:text-white lg:overflow-hidden">
+    <div className="min-h-screen lg:h-screen lg:max-h-screen w-full bg-slate-50 flex flex-col justify-between items-center p-3 sm:p-5 lg:p-6 font-sans selection:bg-teal-600 selection:text-white lg:overflow-hidden">
       {/* Top Header Branding (Centered) */}
       <div className="flex flex-col items-center text-center pt-1 xl:pt-4 shrink-0">
         {/* Custom AttendEase Squircle App Icon */}
-        <div className="w-14 h-14 xl:w-18 xl:h-18 rounded-2xl bg-[#04140D] border border-emerald-500/30 flex flex-col items-center justify-center p-1.5 shadow-lg shadow-emerald-950/20 mb-2 relative group hover:border-emerald-400/50 transition">
+        <div className="w-14 h-14 xl:w-18 xl:h-18 rounded-2xl bg-gradient-to-tr from-teal-500 to-emerald-600 text-white flex flex-col items-center justify-center p-1.5 shadow-md shadow-teal-500/25 mb-2 relative group hover:scale-105 transition">
           <div className="relative flex items-center justify-center">
-            <div className="absolute w-9 h-9 xl:w-11 xl:h-11 rounded-full border border-emerald-400/30 animate-ping" />
-            <ScanFace size={22} className="text-emerald-300 z-10" />
+            <div className="absolute w-9 h-9 xl:w-11 xl:h-11 rounded-full border border-white/40 animate-ping" />
+            <ScanFace size={22} className="text-white z-10" />
           </div>
-          <span className="text-[8px] xl:text-[9px] font-extrabold text-emerald-300 tracking-wider uppercase mt-1 leading-none">
-            AttendEase
+          <span className="text-[8px] xl:text-[9px] font-extrabold text-teal-100 tracking-wider uppercase mt-1 leading-none">
+            Smart Attendance
           </span>
         </div>
 
         {/* Brand Title */}
-        <h1 className="text-2xl xl:text-3xl font-extrabold text-[#0B4A3A] tracking-tight">
-          AttendEase
+        <h1 className="text-2xl xl:text-3xl font-extrabold text-teal-900 tracking-tight">
+          Smart Attendance
         </h1>
 
         {/* Subtitle */}
@@ -156,7 +248,7 @@ export const AppLogin: React.FC = () => {
       {/* Main Login Card (Centered Floating White Card) */}
       <div className="w-full max-w-[420px] bg-white rounded-2xl xl:rounded-[28px] border border-slate-200/90 p-5 sm:p-6 xl:p-8 shadow-xs my-auto shrink-0">
         {/* Card Header */}
-        <div className="mb-3">
+        <div className="mb-5">
           <h2 className="text-xl xl:text-2xl font-black text-slate-900 tracking-tight">
             Welcome back
           </h2>
@@ -164,72 +256,33 @@ export const AppLogin: React.FC = () => {
             Log in to verify class attendance & check academic streak
           </p>
         </div>
-
-        {/* Classroom Proximity Beacon Sensor Indicator */}
-        <div className="mb-3 p-2 rounded-xl bg-emerald-50 border border-emerald-200/80 flex items-center gap-2 text-[11px] text-emerald-800">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
-          <span className="font-semibold truncate">
-            Beacon in Range: <span className="font-bold text-emerald-950">CS301 Machine Learning</span>
-          </span>
-        </div>
-
-        {/* Quick Fill Credentials Buttons */}
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <button
-            type="button"
-            onClick={() => {
-              setIdentifier('student');
-              setPassword('student123');
-              setErrors({});
-            }}
-            className={`py-1.5 px-2 rounded-xl text-[11px] font-bold transition flex flex-col items-center justify-center border cursor-pointer ${
-              identifier.toLowerCase() === 'student'
-                ? 'bg-teal-50 border-teal-400 text-teal-900 shadow-xs'
-                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <div className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
-              <span>Student</span>
-            </div>
-            <span className="text-[10px] text-slate-500 font-mono font-normal">student / student123</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setIdentifier('faculty');
-              setPassword('faculty123');
-              setErrors({});
-            }}
-            className={`py-1.5 px-2 rounded-xl text-[11px] font-bold transition flex flex-col items-center justify-center border cursor-pointer ${
-              identifier.toLowerCase() === 'faculty'
-                ? 'bg-indigo-50 border-indigo-400 text-indigo-900 shadow-xs'
-                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <div className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-              <span>Faculty</span>
-            </div>
-            <span className="text-[10px] text-slate-500 font-mono font-normal">faculty / faculty123</span>
-          </button>
-        </div>
-
         {/* Login Form */}
         <form onSubmit={handleSubmit} noValidate className="space-y-3">
-          {/* Field 1: USERNAME, ROLL NO, OR FACULTY ID */}
+          {/* Prominent Access Restriction Alert Banner */}
+          {errors.identifier && (
+            <div role="alert" className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 space-y-1 animate-in fade-in">
+              <div className="flex items-center gap-2 text-rose-700 font-bold text-xs">
+                <AlertCircle size={15} className="shrink-0 text-rose-600" />
+                <span>Access Restricted</span>
+              </div>
+              <p className="text-[11px] text-rose-700 leading-snug">
+                {errors.identifier}
+              </p>
+            </div>
+          )}
+
+          {/* Field 1: INSTITUTIONAL EMAIL ID */}
           <div className="space-y-1">
             <label 
               htmlFor="app-identifier" 
               className="text-[10px] font-extrabold tracking-wider uppercase text-slate-500 block select-none"
             >
-              USERNAME, ROLL NO, OR FACULTY ID
+              INSTITUTIONAL EMAIL ID (OR ROLL / STAFF ID)
             </label>
 
             <div className="relative group">
               <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-focus-within:text-[#0B4A3A] transition-colors">
-                <User size={16} />
+                <Mail size={16} />
               </div>
               <input
                 id="app-identifier"
@@ -243,7 +296,7 @@ export const AppLogin: React.FC = () => {
                   }
                 }}
                 onBlur={() => handleBlur('identifier')}
-                placeholder="student or faculty"
+                placeholder="name@campus.edu or roster email"
                 autoComplete="username"
                 disabled={isLoading}
                 className={`w-full py-2.5 xl:py-3 pl-10 pr-3 bg-white border rounded-xl text-xs xl:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none transition-all ${
@@ -253,13 +306,6 @@ export const AppLogin: React.FC = () => {
                 }`}
               />
             </div>
-
-            {errors.identifier && (
-              <div role="alert" className="flex items-center gap-1 text-[11px] text-rose-500 font-medium">
-                <AlertCircle size={12} className="shrink-0" />
-                <span>{errors.identifier}</span>
-              </div>
-            )}
           </div>
 
           {/* Field 2: PASSWORD */}
@@ -333,7 +379,7 @@ export const AppLogin: React.FC = () => {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full py-2.5 xl:py-3 px-5 mt-2 rounded-xl font-extrabold text-xs xl:text-sm tracking-wider uppercase text-white bg-[#0B4A3A] hover:bg-[#073529] shadow-md shadow-[#0B4A3A]/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] ${
+            className={`w-full py-2.5 xl:py-3 px-5 mt-2 rounded-xl font-extrabold text-xs xl:text-sm tracking-wider uppercase text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 shadow-md shadow-teal-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] ${
               isLoading ? 'opacity-80 cursor-wait' : ''
             }`}
           >
@@ -361,33 +407,20 @@ export const AppLogin: React.FC = () => {
           </span>
         </div>
 
-        {/* Continue with Campus Google Workspace Button */}
-        <button
-          type="button"
-          onClick={handleGoogleLogin}
-          disabled={isLoading}
-          className="w-full py-2.5 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-800 flex items-center justify-center gap-2.5 transition shadow-2xs active:scale-[0.99] cursor-pointer disabled:opacity-60"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24">
-            <path
-              fill="#4285F4"
-              d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.87c2.26-2.09 3.675-5.17 3.675-9.15z"
-            />
-            <path
-              fill="#34A853"
-              d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.87-3.05c-1.08.72-2.45 1.16-4.06 1.16-3.13 0-5.78-2.11-6.73-4.96H1.26v3.15C3.25 21.36 7.35 24 12 24z"
-            />
-            <path
-              fill="#FBBC05"
-              d="M5.27 14.24A7.18 7.18 0 0 1 4.89 12c0-.78.14-1.53.38-2.24V6.61H1.26A11.967 11.967 0 0 0 0 12c0 1.92.45 3.74 1.26 5.39l4.01-3.15z"
-            />
-            <path
-              fill="#EA4335"
-              d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.25 2.64 1.26 6.61l4.01 3.15c.95-2.85 3.6-4.96 6.73-4.96z"
-            />
-          </svg>
-          <span>Continue with Google Workspace</span>
-        </button>
+        {/* Google Workspace Sign-In Button */}
+        <div className="flex justify-center w-full min-h-[44px]">
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={() => {
+              setErrors({ identifier: 'Google sign-in was cancelled or failed.' });
+            }}
+            shape="pill"
+            size="large"
+            width="360"
+            text="continue_with"
+            theme="outline"
+          />
+        </div>
       </div>
 
       {/* Below Card Links */}
@@ -415,6 +448,24 @@ export const AppLogin: React.FC = () => {
           </Link>
         </div>
       </div>
+
+      <ForcePasswordChangeModal
+        isOpen={isForcePasswordOpen}
+        onSuccess={() => {
+          setIsForcePasswordOpen(false);
+          const r = pendingRole || 'student';
+          if (r === 'admin') {
+            setRole('admin');
+            navigate('/admin');
+          } else if (r === 'faculty') {
+            setRole('faculty');
+            navigate('/faculty');
+          } else {
+            setRole('student');
+            navigate('/student');
+          }
+        }}
+      />
     </div>
   );
 };

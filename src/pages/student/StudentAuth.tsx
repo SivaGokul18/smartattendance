@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Sparkles, User, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Sparkles, Mail, Lock, ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAppStore } from '../../store/useAppStore';
+import { authApi } from '../../api/client';
+import { getRosterAccount } from '../../lib/rosterAccounts';
 
 interface StudentAuthProps {
   onLoginSuccess?: () => void;
@@ -9,11 +12,13 @@ interface StudentAuthProps {
 
 export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess }) => {
   const navigate = useNavigate();
-  const { selectedStudent } = useAppStore();
+  const { setAuthUser, syncWithBackend } = useAppStore();
 
   const [isSplashing, setIsSplashing] = useState(true);
-  const [rollNumber, setRollNumber] = useState('student');
-  const [password, setPassword] = useState('student123');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -22,12 +27,127 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (onLoginSuccess) {
-      onLoginSuccess();
-    } else {
-      navigate('/student');
+    setError(null);
+    setIsLoading(true);
+
+    const trimmed = identifier.trim();
+    try {
+      const authRes = await authApi.login({ identifier: trimmed, password });
+      setAuthUser({
+        id: authRes.user_id,
+        name: authRes.name,
+        email: authRes.email,
+        role: authRes.role,
+        rollNumber: authRes.rollNumber,
+        employeeId: authRes.employeeId,
+        phone: authRes.phone,
+        year: authRes.year,
+        section: authRes.section,
+        attendanceRate: authRes.attendanceRate,
+        mentorId: authRes.mentorId,
+        mentorName: authRes.mentorName,
+        designation: authRes.designation,
+        isMentor: authRes.isMentor,
+        mentorGroup: authRes.mentorGroup,
+        photoUrl: authRes.photoUrl,
+        department: authRes.department,
+      });
+      await syncWithBackend();
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      } else {
+        navigate('/student');
+      }
+    } catch (err: any) {
+      console.warn('Backend login response/error:', err);
+      const backendDetail = err?.response?.data?.detail;
+      if (backendDetail) {
+        setError(backendDetail);
+        setIsLoading(false);
+        return;
+      }
+
+      // Offline fallback: check Excel roster
+      const rosterAcc = getRosterAccount(trimmed);
+      if (!rosterAcc) {
+        setError('Access Restricted: This email ID is not registered in the institutional Excel roster. Only authorized accounts from the Excel roster are permitted to log in.');
+        setIsLoading(false);
+        return;
+      }
+      if (rosterAcc.role !== 'student') {
+        setError(`Access Restricted: This account belongs to ${rosterAcc.role.toUpperCase()} roster. Please use the appropriate portal.`);
+        setIsLoading(false);
+        return;
+      }
+      if (password !== rosterAcc.password) {
+        setError('Invalid password. Please verify your credentials.');
+        setIsLoading(false);
+        return;
+      }
+
+      setAuthUser({
+        name: rosterAcc.name,
+        email: rosterAcc.email,
+        role: rosterAcc.role,
+        rollNumber: rosterAcc.identifier,
+        department: rosterAcc.department,
+        phone: rosterAcc.phone,
+      });
+
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      } else {
+        navigate('/student');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    if (!credentialResponse?.credential) return;
+    setError(null);
+    setIsLoading(true);
+    try {
+      const authRes = await authApi.googleLogin({
+        credential: credentialResponse.credential,
+        target_role: 'student',
+      });
+      setAuthUser({
+        id: authRes.user_id,
+        name: authRes.name,
+        email: authRes.email,
+        role: authRes.role,
+        rollNumber: authRes.rollNumber,
+        employeeId: authRes.employeeId,
+        phone: authRes.phone,
+        year: authRes.year,
+        section: authRes.section,
+        attendanceRate: authRes.attendanceRate,
+        mentorId: authRes.mentorId,
+        mentorName: authRes.mentorName,
+        designation: authRes.designation,
+        isMentor: authRes.isMentor,
+        mentorGroup: authRes.mentorGroup,
+        photoUrl: authRes.photoUrl,
+        department: authRes.department,
+      });
+      await syncWithBackend();
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      } else {
+        navigate('/student');
+      }
+    } catch (err: any) {
+      console.warn('Google student login error:', err);
+      setError(
+        err?.response?.data?.detail || 
+        'Access Restricted: Google account is not in the institutional Excel roster.'
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -37,7 +157,7 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess }) => {
         <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-teal-500 via-emerald-500 to-indigo-600 flex items-center justify-center shadow-xl shadow-teal-500/25 animate-bounce">
           <Sparkles size={38} className="text-white" />
         </div>
-        <h1 className="text-2xl font-black text-slate-900 mt-6 tracking-tight">AttendEase</h1>
+        <h1 className="text-2xl font-black text-slate-900 mt-6 tracking-tight">Smart Attendance</h1>
         <span className="text-xs font-bold uppercase tracking-widest text-teal-600 mt-1">
           Student Portal
         </span>
@@ -57,9 +177,8 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess }) => {
           className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-teal-600 transition font-medium"
         >
           <ArrowLeft size={13} />
-          <span>Main Login</span>
+          <span>Back</span>
         </Link>
-        <span className="text-[10px] font-mono font-bold text-slate-400">/student/login</span>
       </div>
 
       {/* Centered Logo & Title with Teal-Indigo Accent */}
@@ -68,23 +187,34 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess }) => {
           <Sparkles size={24} />
         </div>
         <h2 className="text-2xl font-black text-slate-900 tracking-tight">Student Login</h2>
-        <p className="text-xs text-slate-500 mt-1">
-          Instant BLE detection & biometric face verification
-        </p>
       </div>
 
       {/* Form in Light Theme */}
       <form onSubmit={handleLogin} className="space-y-4 my-auto">
+        {error && (
+          <div role="alert" className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 space-y-1 animate-in fade-in">
+            <div className="flex items-center gap-1.5 text-rose-700 font-bold text-xs">
+              <AlertCircle size={15} className="shrink-0 text-rose-600" />
+              <span>Access Restricted</span>
+            </div>
+            <p className="text-[11px] text-rose-700 leading-snug">
+              {error}
+            </p>
+          </div>
+        )}
+
         <div>
           <label className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider block mb-1">
-            Roll Number or Student Email
+            Institutional Email ID (or Roll Number)
           </label>
           <div className="relative">
-            <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              value={rollNumber}
-              onChange={(e) => setRollNumber(e.target.value)}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="sivagokulc18@gmail.com or 7376242IT303"
+              disabled={isLoading}
               className="w-full pl-10 pr-4 py-3 rounded-full bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-teal-600 font-mono transition"
               required
             />
@@ -101,6 +231,7 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess }) => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
               className="w-full pl-10 pr-4 py-3 rounded-full bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-teal-600 transition"
               required
             />
@@ -109,11 +240,35 @@ export const StudentAuth: React.FC<StudentAuthProps> = ({ onLoginSuccess }) => {
 
         <button
           type="submit"
-          className="w-full py-3.5 mt-2 rounded-full font-bold text-xs text-white bg-gradient-to-r from-teal-500 to-indigo-600 hover:brightness-110 shadow-lg shadow-teal-500/25 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer"
+          disabled={isLoading}
+          className={`w-full py-3.5 mt-2 rounded-full font-bold text-xs text-white bg-gradient-to-r from-teal-500 to-indigo-600 hover:brightness-110 shadow-lg shadow-teal-500/25 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer ${
+            isLoading ? 'opacity-75 cursor-wait' : ''
+          }`}
         >
-          <span>Login to Student Portal</span>
+          <span>{isLoading ? 'Signing In...' : 'Sign In'}</span>
           <ArrowRight size={14} />
         </button>
+
+        {/* OR Divider */}
+        <div className="relative my-3 text-center">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-200" />
+          </div>
+          <span className="relative px-2.5 bg-white text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            OR
+          </span>
+        </div>
+
+        {/* Google Sign In */}
+        <div className="flex justify-center w-full min-h-[40px]">
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            shape="pill"
+            size="medium"
+            text="signin_with"
+            theme="outline"
+          />
+        </div>
       </form>
 
       <div className="text-center pb-2">

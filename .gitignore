@@ -31,5 +31,33 @@ android/app/build/
 android/capacitor-cordova-android-plugins/build/
 android/build/
 android/local.properties
-.gradle/
+# Playwright artifacts
+test-results/
+playwright-report/
 
+# Environment and Secrets
+.env
+.env.local
+.env.*.local
+*.env
+backend/.env
+!.env.example
+!backend/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+.venv/
+venv/
+ENV/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+backend/*.db
+backend/smart_attendance.db

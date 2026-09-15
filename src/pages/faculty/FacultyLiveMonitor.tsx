@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Radio, Users, CheckCircle2, Clock, StopCircle, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Radio, Users, CheckCircle2, Clock, StopCircle, ShieldCheck, Wifi } from 'lucide-react';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useAppStore } from '../../store/useAppStore';
+import { useFacultyLiveSession, LiveSessionEvent } from '../../hooks/useLiveSession';
 
 interface FacultyLiveMonitorProps {
   onEndSession: () => void;
@@ -12,6 +13,23 @@ export const FacultyLiveMonitor: React.FC<FacultyLiveMonitorProps> = ({ onEndSes
   const { students } = useAppStore();
 
   const [simulatedTimeLeft, setSimulatedTimeLeft] = useState(580);
+
+  // Handle incoming real WebSocket check-in events
+  const handleLiveEvent = useCallback((event: LiveSessionEvent) => {
+    if (event.type === 'STUDENT_CHECKIN') {
+      studentCheckIn({
+        id: event.data.studentId,
+        name: event.data.studentName,
+        rollNumber: event.data.rollNumber,
+        department: event.data.department,
+        method: event.data.method as any,
+        overrideReason: event.data.overrideReason,
+      });
+    }
+  }, [studentCheckIn]);
+
+  // Connect to live WebSocket stream
+  const { isConnected: isWsLive } = useFacultyLiveSession(activeSession?.id, handleLiveEvent);
 
   useEffect(() => {
     const timer = setInterval(() => {

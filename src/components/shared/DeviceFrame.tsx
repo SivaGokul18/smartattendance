@@ -36,7 +36,7 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({ children, roleName }) 
       <div className="flex items-center justify-between w-full max-w-[395px] mb-2.5 px-2 text-xs text-slate-500">
         <div className="flex items-center gap-1.5 font-bold text-slate-700">
           <Smartphone size={14} className="text-indigo-600" />
-          <span>AttendEase {roleName} Simulator</span>
+          <span>Smart Attendance {roleName} Simulator</span>
         </div>
         <button
           onClick={() => setIsMaximized(true)}

@@ -95,7 +95,7 @@ export const AdminLayout: React.FC = () => {
               </div>
               {!isSidebarCollapsed && (
                 <div>
-                  <h1 className="font-extrabold text-base tracking-tight text-slate-900">AttendEase</h1>
+                  <h1 className="font-extrabold text-base tracking-tight text-slate-900">Smart Attendance</h1>
                   <span className="text-[10px] text-indigo-600 font-semibold tracking-wider uppercase block">
                     Admin Console
                   </span>
@@ -154,7 +154,7 @@ export const AdminLayout: React.FC = () => {
               </div>
               <div className="flex-1 truncate">
                 <span className="text-xs font-bold text-slate-900 block truncate">Administrator</span>
-                <span className="text-[10px] text-slate-500 font-mono">admin@attendease.edu</span>
+                <span className="text-[10px] text-slate-500 font-mono">admin@smartattendance.edu</span>
               </div>
             </div>
           )}
@@ -203,11 +203,9 @@ export const AdminLayout: React.FC = () => {
 
             {/* Admin Avatar */}
             <div className="flex items-center gap-2">
-              <img
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
-                alt="Admin"
-                className="w-8 h-8 rounded-full object-cover border border-indigo-500/40"
-              />
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-800 text-white flex items-center justify-center text-xs font-black shadow-xs ring-2 ring-indigo-100 shrink-0">
+                SA
+              </div>
               <div className="hidden sm:block text-left">
                 <span className="text-xs font-bold text-slate-900 block leading-none">Super Admin</span>
                 <span className="text-[10px] text-emerald-600 font-medium">Active Session</span>

@@ -15,6 +15,14 @@ import {
 import { useAppStore } from '../../store/useAppStore';
 import { Student } from '../../types';
 
+const getInitials = (name: string) => {
+  const clean = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.)\s+/i, '').trim();
+  const parts = clean.split(' ').filter(Boolean);
+  if (parts.length === 0) return 'ST';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 export const AdminStudents: React.FC = () => {
   const { students, faculty, addStudent, updateStudent, deleteStudent } = useAppStore();
 
@@ -232,11 +240,9 @@ export const AdminStudents: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={std.photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'}
-                          alt={std.name}
-                          className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-xs"
-                        />
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-50 to-slate-100 border border-indigo-200/70 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs">
+                          {getInitials(std.name)}
+                        </div>
                         <div>
                           <span className="font-bold text-slate-900 block">{std.name}</span>
                           <span className="text-[11px] text-slate-500">{std.phone}</span>
@@ -280,7 +286,7 @@ export const AdminStudents: React.FC = () => {
                       </div>
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="font-semibold text-slate-800">{std.mentorName || 'Dr. Rajesh Kumar'}</div>
+                      <div className="font-semibold text-slate-800">{std.mentorName || 'Not Assigned'}</div>
                       <div className="text-[10px] text-indigo-600 font-medium">Designated Mentor</div>
                     </td>
                     <td className="py-3.5 px-4 text-right">
@@ -360,7 +366,7 @@ export const AdminStudents: React.FC = () => {
 
       {/* Slide-in Drawer for Add / Edit Student in White */}
       {isDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/25 backdrop-blur-xs">
           <div className="w-full max-w-md h-full bg-white border-l border-slate-200 shadow-2xl flex flex-col p-6 overflow-hidden text-slate-900 animate-in slide-in-from-right">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div>
@@ -383,26 +389,13 @@ export const AdminStudents: React.FC = () => {
                   Face Biometric Photo
                 </label>
                 <div className="flex items-center gap-4">
-                  <img
-                    src={photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'}
-                    alt="Preview"
-                    className="w-16 h-16 rounded-full object-cover border-2 border-indigo-500 shadow-md"
-                  />
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-indigo-800 text-white flex items-center justify-center text-xl font-bold shadow-md border-2 border-indigo-400 shrink-0">
+                    {name ? getInitials(name) : 'ST'}
+                  </div>
                   <div className="flex-1">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPhotoUrl(
-                          `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 90000000)}?w=150&auto=format&fit=crop&q=80`
-                        )
-                      }
-                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition"
-                    >
-                      <Upload size={13} />
-                      <span>Upload / Randomize</span>
-                    </button>
-                    <span className="text-[10px] text-slate-400 block mt-1">
-                      Used for Face-ID neural vector embeddings.
+                    <span className="text-xs font-bold text-slate-900 block">Biometric Monogram Badge</span>
+                    <span className="text-[11px] text-slate-500 block mt-0.5">
+                      Neural vector profile automatically linked to student profile.
                     </span>
                   </div>
                 </div>

@@ -3,12 +3,21 @@ import { Plus, Search, Trash2, Edit3, X, Mail, Phone, BookOpen, Check } from 'lu
 import { useAppStore } from '../../store/useAppStore';
 import { Faculty } from '../../types';
 
+const getInitials = (name: string) => {
+  const clean = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.)\s+/i, '').trim();
+  const parts = clean.split(' ').filter(Boolean);
+  if (parts.length === 0) return 'FC';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 export const AdminFaculty: React.FC = () => {
-  const { faculty, addFaculty, updateFaculty, toggleFacultyStatus, subjects } = useAppStore();
+  const { faculty, addFaculty, updateFaculty, toggleFacultyStatus, deleteFaculty, subjects } = useAppStore();
 
   const [search, setSearch] = useState('');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null);
+  const [facultyToDelete, setFacultyToDelete] = useState<Faculty | null>(null);
 
   // Form states
   const [name, setName] = useState('');
@@ -90,10 +99,7 @@ export const AdminFaculty: React.FC = () => {
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Faculty Management</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Teaching staff directory, assigned subjects, and Bluetooth broadcast authorization.
-          </p>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Faculty</h2>
         </div>
         <button
           onClick={openAddDrawer}
@@ -110,14 +116,14 @@ export const AdminFaculty: React.FC = () => {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by faculty name, ID, or department..."
+            placeholder="Search..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600"
           />
         </div>
         <span className="text-xs text-slate-500 hidden sm:block font-medium">
-          {filteredFaculty.length} registered faculty members
+          {filteredFaculty.length} faculty
         </span>
       </div>
 
@@ -141,11 +147,9 @@ export const AdminFaculty: React.FC = () => {
                 <tr key={fac.id} className="hover:bg-slate-50 transition">
                   <td className="py-3.5 px-4">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={fac.photoUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80'}
-                        alt={fac.name}
-                        className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-xs"
-                      />
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-50 to-slate-100 border border-indigo-200/70 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs">
+                        {getInitials(fac.name)}
+                      </div>
                       <div>
                         <span className="font-bold text-slate-900 block">{fac.name}</span>
                         <span className="text-[10px] text-indigo-600 font-semibold">Verified Instructor</span>
@@ -202,8 +206,16 @@ export const AdminFaculty: React.FC = () => {
                       <button
                         onClick={() => openEditDrawer(fac)}
                         className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-100 transition"
+                        title="Edit Faculty"
                       >
                         <Edit3 size={15} />
+                      </button>
+                      <button
+                        onClick={() => setFacultyToDelete(fac)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                        title="Remove Faculty (Resigned / Left)"
+                      >
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </td>
@@ -216,7 +228,7 @@ export const AdminFaculty: React.FC = () => {
 
       {/* Slide Drawer for Add/Edit Faculty in White */}
       {isDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/25 backdrop-blur-xs">
           <div className="w-full max-w-md h-full bg-white border-l border-slate-200 shadow-2xl flex flex-col p-6 overflow-hidden text-slate-900 animate-in slide-in-from-right">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div>
@@ -240,7 +252,7 @@ export const AdminFaculty: React.FC = () => {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Dr. Rajesh Kumar"
+                  placeholder="e.g. Prof. Priya Dharshini"
                   className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600"
                   required
                 />
@@ -339,6 +351,43 @@ export const AdminFaculty: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Delete Faculty Confirmation Dialog */}
+      {facultyToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-200 space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 size={24} />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-base font-black text-slate-900 tracking-tight">
+                Remove Faculty Member?
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Are you sure you want to remove <strong className="text-slate-800">{facultyToDelete.name}</strong> from the faculty directory? This removes their profile and assignments in case of resignation.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <button
+                onClick={() => setFacultyToDelete(null)}
+                className="py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  deleteFaculty(facultyToDelete.id);
+                  setFacultyToDelete(null);
+                }}
+                className="py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-xs cursor-pointer"
+              >
+                Remove Faculty
+              </button>
+            </div>
           </div>
         </div>
       )}

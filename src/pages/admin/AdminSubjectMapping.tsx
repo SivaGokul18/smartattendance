@@ -3,6 +3,14 @@ import { Plus, Search, BookOpen, Users, X, Award, Check } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { Subject } from '../../types';
 
+const getInitials = (name: string) => {
+  const clean = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.)\s+/i, '').trim();
+  const parts = clean.split(' ').filter(Boolean);
+  if (parts.length === 0) return 'FC';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 export const AdminSubjectMapping: React.FC = () => {
   const { subjects, faculty, classSections, addSubject } = useAppStore();
 
@@ -108,13 +116,13 @@ export const AdminSubjectMapping: React.FC = () => {
               <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
                 <div className="flex items-center -space-x-2">
                   {assignedFac.map((fac) => (
-                    <img
+                    <div
                       key={fac.id}
-                      src={fac.photoUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150'}
-                      alt={fac.name}
                       title={fac.name}
-                      className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-xs"
-                    />
+                      className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-50 to-slate-100 border-2 border-white text-indigo-700 flex items-center justify-center text-[10px] font-bold shadow-xs"
+                    >
+                      {getInitials(fac.name)}
+                    </div>
                   ))}
                   {assignedFac.length === 0 && (
                     <span className="text-[11px] text-slate-400 italic">No faculty assigned</span>
@@ -131,7 +139,7 @@ export const AdminSubjectMapping: React.FC = () => {
 
       {/* Detail Modal with Tabs in White */}
       {selectedSubject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 backdrop-blur-xs p-4">
           <div className="w-full max-w-lg bg-white p-6 border border-slate-200 shadow-2xl rounded-3xl text-slate-900">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -230,11 +238,9 @@ export const AdminSubjectMapping: React.FC = () => {
                         className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between"
                       >
                         <div className="flex items-center gap-2.5">
-                          <img
-                            src={fac.photoUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150'}
-                            alt=""
-                            className="w-7 h-7 rounded-full border border-slate-200"
-                          />
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-50 to-slate-100 border border-indigo-200/60 text-indigo-700 flex items-center justify-center text-[10px] font-bold shrink-0 shadow-2xs">
+                            {getInitials(fac.name)}
+                          </div>
                           <div>
                             <span className="font-bold text-slate-900 block">{fac.name}</span>
                             <span className="text-[10px] text-slate-500 font-mono">{fac.employeeId}</span>
@@ -264,7 +270,7 @@ export const AdminSubjectMapping: React.FC = () => {
 
       {/* Add Subject Modal in White */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 backdrop-blur-xs p-4">
           <div className="w-full max-w-md bg-white p-6 border border-slate-200 shadow-2xl rounded-3xl text-slate-900">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
               <h3 className="font-bold text-slate-900 text-base">Add New Subject</h3>

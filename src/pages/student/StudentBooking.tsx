@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar, 
   Clock, 
@@ -25,12 +25,18 @@ import {
   XCircle,
   Clock3,
   UserCheck,
-  Sunrise,
-  Sunset
+  Sunrise, 
+  Sunset,
+  Database,
+  Sparkles,
+  BookOpen,
+  Layers,
+  RefreshCw
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useAppStore } from '../../store/useAppStore';
-import { BookingSlot } from '../../types';
+import { BookingSlot, TimetableSlot } from '../../types';
+import { studentApi } from '../../api/client';
 
 export const StudentBooking: React.FC = () => {
   const { 
@@ -43,16 +49,106 @@ export const StudentBooking: React.FC = () => {
     faculty, 
     leaveRequests, 
     addLeaveRequest, 
-    cancelLeaveRequest 
+    cancelLeaveRequest,
+    timetable,
+    addTimetableSlot,
+    deleteTimetableSlot,
+    loadWeeklyTimetableFromDB,
+    classSections,
+    syncWithBackend
   } = useAppStore();
 
-  // Primary navigation: 'available' = Bookings, 'leave' = Leave Applications
-  const [activeTab, setActiveTab] = useState<'available' | 'leave'>('available');
+  useEffect(() => {
+    syncWithBackend();
+  }, []);
+
+  // Primary navigation: 'timetable' = Time Table, 'available' = Bookings, 'leave' = Leave Applications
+  const [activeTab, setActiveTab] = useState<'available' | 'leave' | 'timetable'>('timetable');
+
+  // Timetable states (Default: All Week matching reference)
+  const [timetableDayFilter, setTimetableDayFilter] = useState<'all' | TimetableSlot['day']>('all');
+  const [selectedSectionId, setSelectedSectionId] = useState<string>('all');
+  const [selectedMentorId, setSelectedMentorId] = useState<string>('');
+  const [isRefreshingSchedule, setIsRefreshingSchedule] = useState(false);
+  const [isRefreshingLeaves, setIsRefreshingLeaves] = useState(false);
+
+  // Match current student's class
+  const studentClass = useMemo(() => {
+    if (selectedSectionId && selectedSectionId !== 'all') {
+      const found = classSections.find((c) => c.id === selectedSectionId || c.name === selectedSectionId);
+      if (found) return found;
+    }
+    return (
+      classSections.find(
+        (c) => c.department === selectedStudent.department && c.year === selectedStudent.year && c.section === selectedStudent.section
+      ) ||
+      classSections[0] || {
+        id: 'sec-all',
+        name: `${selectedStudent.department || 'Information Technology'} (Year ${selectedStudent.year || 3})`,
+        department: selectedStudent.department || 'Information Technology',
+        year: selectedStudent.year || 3,
+        section: selectedStudent.section || 'A',
+        studentCount: 45,
+        subjectFacultyMap: [],
+      }
+    );
+  }, [selectedSectionId, classSections, selectedStudent]);
+
+  const studentTimetableSlots = useMemo(() => {
+    if (!timetable || timetable.length === 0) return [];
+    if (selectedSectionId && selectedSectionId !== 'all') {
+      const filtered = timetable.filter(
+        (s) => s.classSectionId === selectedSectionId || s.classSectionName === selectedSectionId
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    const matched = timetable.filter(
+      (s) => !studentClass || !s.classSectionId || s.classSectionId === studentClass.id
+    );
+    // If matched slots is empty, fallback to all timetable slots so schedule is never blank
+    return matched.length > 0 ? matched : timetable;
+  }, [timetable, selectedSectionId, studentClass]);
+
+  const filteredTimetableSlots = useMemo(() => {
+    return studentTimetableSlots.filter((slot) => {
+      if (timetableDayFilter === 'all') return true;
+      return slot.day === timetableDayFilter;
+    });
+  }, [studentTimetableSlots, timetableDayFilter]);
+
+  const refreshSchedule = async () => {
+    setIsRefreshingSchedule(true);
+    try {
+      await syncWithBackend();
+    } finally {
+      setIsRefreshingSchedule(false);
+    }
+  };
+
+  const refreshLeaves = async () => {
+    setIsRefreshingLeaves(true);
+    try {
+      const data = await studentApi.getLeaves();
+      if (Array.isArray(data)) {
+        useAppStore.setState((state) => {
+          const others = state.leaveRequests.filter(
+            (l) => !data.some((d: any) => d.id === l.id)
+          );
+          return { leaveRequests: [...data, ...others] };
+        });
+      }
+    } catch (err) {
+      console.warn('Could not refresh student leaves:', err);
+    } finally {
+      setIsRefreshingLeaves(false);
+    }
+  };
 
   // Booking states
   const [confirmingSlot, setConfirmingSlot] = useState<BookingSlot | null>(null);
   const [confirmedPassSlot, setConfirmedPassSlot] = useState<BookingSlot | null>(null);
   const [cancelingSlotId, setCancelingSlotId] = useState<string | null>(null);
+  const [cancelingLeaveId, setCancelingLeaveId] = useState<string | null>(null);
 
   // Leave Form states (Mentor is assigned via Admin Portal & automatically fetched)
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
@@ -64,14 +160,37 @@ export const StudentBooking: React.FC = () => {
   const [leaveReason, setLeaveReason] = useState('');
   const [leaveFilterStatus, setLeaveFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [submitFeedback, setSubmitFeedback] = useState<string | null>(null);
-  const [cancelingLeaveId, setCancelingLeaveId] = useState<string | null>(null);
+  useEffect(() => {
+    if (activeTab === 'leave') {
+      studentApi.getLeaves()
+        .then((data) => {
+          if (Array.isArray(data)) {
+            useAppStore.setState((state) => {
+              const others = state.leaveRequests.filter(
+                (l) => !data.some((d: any) => d.id === l.id)
+              );
+              return { leaveRequests: [...data, ...others] };
+            });
+          }
+        })
+        .catch((err) => console.warn('Could not refresh student leaves:', err));
+    }
+  }, [activeTab]);
 
   // Filter student leaves
-  const studentLeaves = leaveRequests.filter((l) => l.studentId === selectedStudent.id);
-  const filteredStudentLeaves = studentLeaves.filter((l) => {
-    if (leaveFilterStatus === 'all') return true;
-    return l.status === leaveFilterStatus;
-  });
+  const studentLeaves = useMemo(() => {
+    const matched = leaveRequests.filter(
+      (l) => l.studentId === selectedStudent.id || (selectedStudent.rollNumber && l.rollNumber === selectedStudent.rollNumber)
+    );
+    return matched.length > 0 ? matched : leaveRequests;
+  }, [leaveRequests, selectedStudent]);
+
+  const filteredStudentLeaves = useMemo(() => {
+    return studentLeaves.filter((l) => {
+      if (leaveFilterStatus === 'all') return true;
+      return l.status === leaveFilterStatus;
+    });
+  }, [studentLeaves, leaveFilterStatus]);
 
   // Calculate days between start and end date considering Forenoon (FN) and Afternoon (AN) sessions
   const calculateLeaveDuration = (
@@ -128,10 +247,29 @@ export const StudentBooking: React.FC = () => {
 
   // Automatically fetch student's assigned mentor from DB (assigned via Admin Portal)
   const currentStudent = students.find((s) => s.id === selectedStudent.id) || selectedStudent;
-  const assignedMentor = faculty.find((f) => f.id === currentStudent.mentorId) ||
-    faculty.find((f) => f.name === currentStudent.mentorName) ||
-    faculty.find((f) => f.id === 'fac-1') ||
-    faculty[0];
+
+  const fallbackMentor = useMemo(() => {
+    return {
+      id: currentStudent?.mentorId || faculty[0]?.id || '',
+      name: currentStudent?.mentorName || faculty[0]?.name || (faculty.length > 0 ? 'Faculty Mentor' : 'Unassigned Mentor'),
+      employeeId: faculty[0]?.employeeId || 'N/A',
+      department: currentStudent?.department || faculty[0]?.department || '',
+      email: faculty[0]?.email || '',
+    };
+  }, [currentStudent, faculty]);
+
+  const assignedMentor = useMemo(() => {
+    if (selectedMentorId) {
+      const found = faculty.find((f) => f.id === selectedMentorId);
+      if (found) return found;
+    }
+    return (
+      faculty.find((f) => f.id === currentStudent?.mentorId) ||
+      faculty.find((f) => f.name === currentStudent?.mentorName) ||
+      faculty[0] ||
+      fallbackMentor
+    );
+  }, [selectedMentorId, faculty, currentStudent, fallbackMentor]);
 
   const handleOpenConfirmation = (slot: BookingSlot) => {
     setConfirmingSlot(slot);
@@ -204,7 +342,7 @@ export const StudentBooking: React.FC = () => {
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#1A1D29] text-xs font-semibold hover:bg-slate-50 transition shadow-[0_1px_3px_rgba(0,0,0,0.04)] cursor-pointer"
           >
             <ArrowLeft size={14} className="text-[#6B7280]" />
-            <span>Back to Bookings</span>
+            <span>Back to Schedule</span>
           </button>
 
           <span className="text-[11px] font-mono text-[#6B7280] tracking-wider uppercase font-semibold">
@@ -452,9 +590,9 @@ export const StudentBooking: React.FC = () => {
                   setConfirmedPassSlot(null);
                   setActiveTab('available');
                 }}
-                className="w-full py-3 px-4 rounded-xl font-semibold text-xs text-white bg-[#1A1D29] hover:bg-slate-800 shadow-sm transition cursor-pointer text-center"
+                className="w-full py-3 px-4 rounded-xl font-semibold text-xs text-white bg-teal-600 hover:bg-teal-700 shadow-sm transition cursor-pointer text-center"
               >
-                Back to Available Bookings
+                Back to Class Schedule
               </button>
             </div>
           </div>
@@ -473,14 +611,14 @@ export const StudentBooking: React.FC = () => {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl sm:text-3xl font-bold text-[#1A1D29] tracking-tight">
-              Lab & Session Reservation
+              Class Schedule & Sessions
             </h1>
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
               Live Roster
             </span>
           </div>
           <p className="text-xs sm:text-sm text-[#6B7280] mt-1">
-            Book specialized laboratory sessions and apply for academic leave directly to faculty.
+            View scheduled class & laboratory sessions, reserve seats, and apply for academic leave directly to faculty.
           </p>
         </div>
 
@@ -513,21 +651,21 @@ export const StudentBooking: React.FC = () => {
         </div>
       )}
 
-      {/* 2. Tab Navigation: Replaced "My Bookings" with "Leave" */}
-      <div className="inline-flex p-1 rounded-xl bg-[#F1F5F9] border border-[#E2E8F0]">
+      {/* 2. Tab Navigation: Rounded-full pills matching Image 1 */}
+      <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
         <button
           type="button"
           onClick={() => setActiveTab('available')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'available'
-              ? 'bg-[#1A1D29] text-white shadow-xs'
-              : 'text-[#6B7280] hover:text-[#1A1D29]'
+              ? 'bg-teal-600 text-white shadow-xs'
+              : 'bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
           }`}
         >
           <Calendar size={14} />
-          <span>Bookings</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-            activeTab === 'available' ? 'bg-slate-700 text-white' : 'bg-white text-[#6B7280] border border-[#E2E8F0]'
+          <span>Schedule</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold leading-none ${
+            activeTab === 'available' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
           }`}>
             {bookings.length}
           </span>
@@ -536,18 +674,36 @@ export const StudentBooking: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('leave')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'leave'
-              ? 'bg-[#1A1D29] text-white shadow-xs'
-              : 'text-[#6B7280] hover:text-[#1A1D29]'
+              ? 'bg-teal-600 text-white shadow-xs'
+              : 'bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
           }`}
         >
           <FileText size={14} />
           <span>Leave</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-            activeTab === 'leave' ? 'bg-slate-700 text-white' : 'bg-white text-[#6B7280] border border-[#E2E8F0]'
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold leading-none ${
+            activeTab === 'leave' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
           }`}>
             {studentLeaves.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('timetable')}
+          className={`px-4 py-2 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'timetable'
+              ? 'bg-teal-600 text-white shadow-xs'
+              : 'bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          <Clock size={14} />
+          <span>Time Table</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold leading-none ${
+            activeTab === 'timetable' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {studentTimetableSlots.length}
           </span>
         </button>
       </div>
@@ -555,7 +711,7 @@ export const StudentBooking: React.FC = () => {
       {/* =====================================================================
           TAB 1: "Bookings" (Available Laboratory Sessions)
           ===================================================================== */}
-      {activeTab === 'available' ? (
+      {activeTab === 'available' && (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-[#1A1D29]">
@@ -651,10 +807,12 @@ export const StudentBooking: React.FC = () => {
             </div>
           )}
         </div>
-      ) : (
-        /* =====================================================================
-            TAB 2: "Leave" (Student Apply Leave & View Applications)
-            ===================================================================== */
+      )}
+
+      {/* =====================================================================
+          TAB 2: "Leave" (Student Apply Leave & View Applications)
+          ===================================================================== */}
+      {activeTab === 'leave' && (
         <div className="space-y-6">
           {/* Top Actions & Overview */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-[#E5E7EB] shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
@@ -672,14 +830,27 @@ export const StudentBooking: React.FC = () => {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsLeaveModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-semibold shadow-[0_2px_8px_rgba(79,70,229,0.25)] transition cursor-pointer self-start sm:self-auto shrink-0"
-            >
-              <Plus size={15} />
-              <span>Apply for Leave</span>
-            </button>
+            <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={refreshLeaves}
+                disabled={isRefreshingLeaves}
+                className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer shadow-2xs"
+                title="Refresh leave requests from server"
+              >
+                <RefreshCw size={13} className={isRefreshingLeaves ? 'animate-spin text-teal-600' : 'text-slate-500'} />
+                <span>{isRefreshingLeaves ? 'Syncing...' : 'Refresh'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsLeaveModalOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-semibold shadow-[0_2px_8px_rgba(79,70,229,0.25)] transition cursor-pointer"
+              >
+                <Plus size={15} />
+                <span>Apply for Leave</span>
+              </button>
+            </div>
           </div>
 
           {/* Filter Pills */}
@@ -692,8 +863,8 @@ export const StudentBooking: React.FC = () => {
                 onClick={() => setLeaveFilterStatus(st)}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition capitalize cursor-pointer ${
                   leaveFilterStatus === st
-                    ? 'bg-[#1A1D29] text-white shadow-xs'
-                    : 'bg-white text-[#6B7280] border border-[#E5E7EB] hover:border-slate-300'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'
                 }`}
               >
                 {st === 'all' ? 'All Applications' : st}
@@ -761,7 +932,7 @@ export const StudentBooking: React.FC = () => {
                       {/* Particular Mentor Assigned */}
                       <div className="p-3 rounded-xl bg-[#FAFAF9] border border-[#E5E7EB] flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-[#1A1D29] text-white text-xs font-semibold flex items-center justify-center shrink-0">
+                          <div className="w-7 h-7 rounded-full bg-teal-600 text-white text-xs font-semibold flex items-center justify-center shrink-0">
                             {leave.mentorName.charAt(leave.mentorName.indexOf(' ') + 1) || 'M'}
                           </div>
                           <div>
@@ -844,10 +1015,214 @@ export const StudentBooking: React.FC = () => {
       )}
 
       {/* =====================================================================
+          TAB 3: "Time Table" (Weekly Academic Schedule & DB Sync)
+          ===================================================================== */}
+      {activeTab === 'timetable' && (
+        <div className="space-y-6">
+          {/* Top Actions & Overview */}
+          <div className="bg-white p-5 rounded-2xl border border-[#E5E7EB] shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-bold text-[#1A1D29]">
+                    Weekly Time Table
+                  </h3>
+                  <span className="text-[11px] font-semibold text-[#4F46E5] bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">
+                    {studentClass?.name || 'Academic Class'}
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                    <Database size={10} />
+                    DB Active ({studentTimetableSlots.length} Slots)
+                  </span>
+                </div>
+                <p className="text-xs text-[#6B7280] mt-1">
+                  Official weekly academic timetable synchronized directly with institutional database.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                {/* Section filter */}
+                <select
+                  value={selectedSectionId}
+                  onChange={(e) => setSelectedSectionId(e.target.value)}
+                  className="text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="all">All Sections ({timetable.length} slots)</option>
+                  {classSections.map((cs) => (
+                    <option key={cs.id} value={cs.id}>
+                      {cs.name} ({cs.department})
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={refreshSchedule}
+                  disabled={isRefreshingSchedule}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer shadow-2xs"
+                  title="Refresh timetable schedule from server"
+                >
+                  <RefreshCw size={13} className={isRefreshingSchedule ? 'animate-spin text-teal-600' : 'text-slate-500'} />
+                  <span>{isRefreshingSchedule ? 'Syncing...' : 'Refresh'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Day Filters matching Image 1 */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {(['all', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const).map((day) => {
+              const count = day === 'all'
+                ? studentTimetableSlots.length
+                : studentTimetableSlots.filter((s) => s.day === day).length;
+              const isSelected = timetableDayFilter === day;
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => setTimetableDayFilter(day)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    isSelected
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{day === 'all' ? 'All Week' : day}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold leading-none ${
+                    isSelected ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Timetable Grid / List */}
+          {filteredTimetableSlots.length > 0 ? (
+            <div className="space-y-6">
+              {(timetableDayFilter === 'all' 
+                ? (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const)
+                : [timetableDayFilter]
+              ).map((day) => {
+                const daySlots = studentTimetableSlots.filter((s) => s.day === day);
+                if (daySlots.length === 0 && timetableDayFilter === 'all') return null;
+
+                const dayFullNames: Record<string, string> = {
+                  Mon: 'Monday',
+                  Tue: 'Tuesday',
+                  Wed: 'Wednesday',
+                  Thu: 'Thursday',
+                  Fri: 'Friday',
+                  Sat: 'Saturday'
+                };
+
+                return (
+                  <div key={day} className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                      <h4 className="text-xs font-bold text-[#1A1D29] uppercase tracking-wider">
+                        {dayFullNames[day] || day}
+                      </h4>
+                      <span className="text-[11px] text-[#6B7280] font-mono">
+                        ({daySlots.length} {daySlots.length === 1 ? 'class' : 'classes'})
+                      </span>
+                    </div>
+
+                    {daySlots.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {daySlots.map((slot) => {
+                          const sub = subjects.find((s) => s.id === slot.subjectId);
+                          const fac = faculty.find((f) => f.id === slot.facultyId);
+                          const isLab = slot.room.toLowerCase().includes('lab') || (sub?.name.toLowerCase().includes('lab'));
+
+                          return (
+                            <div
+                              key={slot.id}
+                              className="p-4 rounded-2xl bg-white border border-[#E5E7EB] shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.06)] transition-all flex flex-col justify-between group"
+                            >
+                              <div className="space-y-2.5">
+                                {/* Header: Time & Room */}
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
+                                    <Clock size={12} />
+                                    {slot.startTime} - {slot.endTime}
+                                  </span>
+
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                                    <MapPin size={11} className="text-slate-400" />
+                                    {slot.room}
+                                  </span>
+                                </div>
+
+                                {/* Subject Details */}
+                                <div>
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                      {sub?.code || slot.subjectCode || 'SUB'}
+                                    </span>
+                                    {isLab && (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        PRACTICAL LAB
+                                      </span>
+                                    )}
+                                  </div>
+                                  <h5 className="font-bold text-sm text-[#1A1D29] leading-snug">
+                                    {sub?.name || slot.subjectName || 'Class Session'}
+                                  </h5>
+                                </div>
+                              </div>
+
+                              {/* Footer: Faculty & Actions */}
+                              <div className="mt-4 pt-3 border-t border-[#F1F5F9] flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-slate-800 text-white text-[10px] font-semibold flex items-center justify-center">
+                                    {fac?.name?.charAt(0) || slot.facultyName?.charAt(0) || 'F'}
+                                  </div>
+                                  <span className="text-xs text-slate-700 font-medium truncate max-w-[130px]">
+                                    {fac?.name || slot.facultyName || 'Faculty Member'}
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => deleteTimetableSlot(slot.id)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 rounded transition opacity-0 group-hover:opacity-100 cursor-pointer"
+                                  title="Delete Slot (Admin)"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-6 rounded-xl bg-white border border-dashed border-[#E5E7EB] text-center text-xs text-[#6B7280]">
+                        No classes scheduled for {dayFullNames[day] || day}.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-10 rounded-2xl bg-white border border-[#E5E7EB] text-center space-y-3">
+              <Clock size={36} className="mx-auto text-[#6B7280]" />
+              <h4 className="text-base font-bold text-[#1A1D29]">No Timetable Slots Found</h4>
+              <p className="text-xs text-[#6B7280] max-w-sm mx-auto">
+                There are currently no slots scheduled for this section. Please check back later.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =====================================================================
           MODAL: APPLY FOR LEAVE (ROUTED TO PARTICULAR FACULTY MENTOR)
           ===================================================================== */}
       {isLeaveModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="w-full max-w-lg bg-white p-6 sm:p-7 border border-[#E5E7EB] shadow-[0_16px_40px_rgba(0,0,0,0.15)] rounded-2xl space-y-5 animate-in zoom-in-95 duration-150 my-8">
             <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3.5">
               <div>
@@ -878,35 +1253,48 @@ export const StudentBooking: React.FC = () => {
                 </span>
               </div>
 
-              {/* 1. Automatically Fetched Mentor (Assigned in Admin Portal) */}
-              <div className="space-y-1.5">
-                <label className="font-semibold text-[#1A1D29] block">
-                  Designated Faculty Mentor
-                </label>
+              {/* 1. Mentor Selection & Card */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-[#1A1D29] block">
+                    Designated Faculty Mentor *
+                  </label>
+                  <span className="text-[10px] font-semibold bg-white text-indigo-700 px-2.5 py-0.5 rounded-full border border-indigo-200 shadow-2xs">
+                    Direct Mentor Route
+                  </span>
+                </div>
 
-                {/* Particular Mentor Card (Auto-fetched, read-only) */}
+                {faculty.length > 0 && (
+                  <select
+                    value={assignedMentor.id}
+                    onChange={(e) => setSelectedMentorId(e.target.value)}
+                    className="w-full text-xs font-medium bg-slate-50 border border-[#E5E7EB] rounded-xl px-3 py-2 text-[#1A1D29] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+                  >
+                    {faculty.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name} — {f.department} ({f.employeeId || 'Faculty'})
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Particular Mentor Card */}
                 <div className="p-3.5 rounded-xl bg-indigo-50/50 border border-indigo-100 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-[#4F46E5] text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-2xs">
-                      {assignedMentor.name.charAt(assignedMentor.name.indexOf(' ') + 1) || 'M'}
+                      {assignedMentor.name ? assignedMentor.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'M'}
                     </div>
                     <div>
                       <div className="text-xs font-bold text-[#1A1D29] flex items-center gap-1.5">
                         <span>{assignedMentor.name}</span>
                         <span className="text-[10px] font-mono text-[#6B7280] bg-white px-1.5 py-0.5 rounded border border-[#E5E7EB]">
-                          {assignedMentor.employeeId || 'EMP-701'}
+                          {assignedMentor.employeeId || 'N/A'}
                         </span>
                       </div>
                       <div className="text-[10px] text-[#6B7280] mt-0.5">
                         {assignedMentor.department} • {assignedMentor.email}
                       </div>
                     </div>
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    <span className="text-[10px] font-semibold bg-white text-indigo-700 px-2.5 py-1 rounded-full border border-indigo-200 shadow-2xs block">
-                      Direct Mentor Route
-                    </span>
                   </div>
                 </div>
               </div>
@@ -967,12 +1355,12 @@ export const StudentBooking: React.FC = () => {
                         onClick={() => setStartSession('FN')}
                         className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition cursor-pointer border ${
                           startSession === 'FN'
-                            ? 'bg-[#1A1D29] text-white border-[#1A1D29] shadow-2xs'
+                            ? 'bg-teal-600 text-white border-teal-600 shadow-2xs'
                             : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:border-slate-300'
                         }`}
                         title="Forenoon (Morning / 1st Half)"
                       >
-                        <Sunrise size={13} className={startSession === 'FN' ? 'text-amber-400' : 'text-amber-500'} />
+                        <Sunrise size={13} className={startSession === 'FN' ? 'text-amber-200' : 'text-amber-500'} />
                         <span>Forenoon (FN)</span>
                       </button>
 
@@ -981,7 +1369,7 @@ export const StudentBooking: React.FC = () => {
                         onClick={() => setStartSession('AN')}
                         className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition cursor-pointer border ${
                           startSession === 'AN'
-                            ? 'bg-[#1A1D29] text-white border-[#1A1D29] shadow-2xs'
+                            ? 'bg-teal-600 text-white border-teal-600 shadow-2xs'
                             : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:border-slate-300'
                         }`}
                         title="Afternoon (Post-Lunch / 2nd Half)"
@@ -1017,12 +1405,12 @@ export const StudentBooking: React.FC = () => {
                         onClick={() => setEndSession('FN')}
                         className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition cursor-pointer border ${
                           endSession === 'FN'
-                            ? 'bg-[#1A1D29] text-white border-[#1A1D29] shadow-2xs'
+                            ? 'bg-teal-600 text-white border-teal-600 shadow-2xs'
                             : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:border-slate-300'
                         }`}
                         title="Forenoon (Morning / 1st Half)"
                       >
-                        <Sunrise size={13} className={endSession === 'FN' ? 'text-amber-400' : 'text-amber-500'} />
+                        <Sunrise size={13} className={endSession === 'FN' ? 'text-amber-200' : 'text-amber-500'} />
                         <span>Forenoon (FN)</span>
                       </button>
 
@@ -1031,7 +1419,7 @@ export const StudentBooking: React.FC = () => {
                         onClick={() => setEndSession('AN')}
                         className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition cursor-pointer border ${
                           endSession === 'AN'
-                            ? 'bg-[#1A1D29] text-white border-[#1A1D29] shadow-2xs'
+                            ? 'bg-teal-600 text-white border-teal-600 shadow-2xs'
                             : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:border-slate-300'
                         }`}
                         title="Afternoon (Post-Lunch / 2nd Half)"
@@ -1107,7 +1495,7 @@ export const StudentBooking: React.FC = () => {
                   className="px-5 py-2.5 rounded-xl font-semibold text-white bg-[#4F46E5] hover:bg-[#4338CA] shadow-[0_2px_8px_rgba(79,70,229,0.25)] transition cursor-pointer flex items-center gap-1.5"
                 >
                   <Send size={13} />
-                  <span>Send to {assignedMentor.name.split(' ')[1] || 'Mentor'}</span>
+                  <span>Send to {assignedMentor.name?.split(' ')[1] || assignedMentor.name || 'Mentor'}</span>
                 </button>
               </div>
             </form>
@@ -1117,7 +1505,7 @@ export const StudentBooking: React.FC = () => {
 
       {/* Withdraw Confirmation Dialog */}
       {cancelingLeaveId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-xs p-4">
           <div className="w-full max-w-sm bg-white p-6 border border-[#E5E7EB] shadow-[0_8px_30px_rgba(0,0,0,0.12)] rounded-2xl space-y-4 animate-in zoom-in-95 duration-150">
             <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
               <AlertCircle size={22} />
@@ -1152,6 +1540,7 @@ export const StudentBooking: React.FC = () => {
           </div>
         </div>
       )}
+
     </div>
   );
 };

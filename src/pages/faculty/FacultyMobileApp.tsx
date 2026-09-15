@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { 
-  Home, 
-  Calendar, 
-  History, 
-  User, 
-  Radio, 
-  Play, 
-  Bell, 
-  LogOut, 
-  Sparkles 
+import {
+  Home,
+  Calendar,
+  History,
+  User,
+  Radio,
+  Play,
+  Bell,
+  LogOut,
+  Sparkles,
+  ClipboardCheck,
+  CalendarDays
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { FacultyHome } from './FacultyHome';
@@ -16,18 +18,43 @@ import { FacultyStartSession } from './FacultyStartSession';
 import { FacultyLiveMonitor } from './FacultyLiveMonitor';
 import { FacultySummary } from './FacultySummary';
 import { FacultyHistory } from './FacultyHistory';
+import { FacultySchedule } from './FacultySchedule';
+import { FacultyApprovals } from './FacultyApprovals';
+import { FacultyLeave } from './FacultyLeave';
 import { FacultyProfile } from './FacultyProfile';
 import { useAppStore } from '../../store/useAppStore';
 import { useSessionStore } from '../../store/useSessionStore';
 
+const getInitials = (name: string) => {
+  const clean = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.)\s+/i, '').trim();
+  const parts = clean.split(' ').filter(Boolean);
+  if (parts.length === 0) return 'FC';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 export const FacultyMobileApp: React.FC = () => {
   const navigate = useNavigate();
-  const { selectedFaculty, setNotificationOpen } = useAppStore();
+  const { selectedFaculty, currentUser, setNotificationOpen, leaveRequests, facultyLeaveRequests } = useAppStore();
   const { activeSession } = useSessionStore();
 
-  const [activeTab, setActiveTab] = useState<'home' | 'timetable' | 'history' | 'profile'>('home');
+  const facultyName = currentUser?.name || selectedFaculty?.name || 'Faculty';
+  const facultyEmail = currentUser?.email || selectedFaculty?.email || 'faculty@campus.edu';
+  const employeeId = currentUser?.employeeId || selectedFaculty?.employeeId || 'STAFF-IT-101';
+
+  const [activeTab, setActiveTab] = useState<'home' | 'timetable' | 'approvals' | 'leave' | 'history' | 'profile'>('home');
   const [activeScreen, setActiveScreen] = useState<'home' | 'start' | 'monitor' | 'summary'>('home');
   const [selectedClassForSession, setSelectedClassForSession] = useState<any>(null);
+
+  // Count pending leave requests for this faculty mentor
+  const pendingApprovalsCount = leaveRequests.filter(
+    (l) => (l.mentorId === selectedFaculty.id || l.mentorName === selectedFaculty.name) && l.status === 'pending'
+  ).length;
+
+  // Count pending leaves filed by this faculty member
+  const pendingFacultyLeavesCount = facultyLeaveRequests.filter(
+    (l) => (l.facultyId === selectedFaculty.id || l.facultyName === selectedFaculty.name) && l.status === 'pending'
+  ).length;
 
   const isBroadcasting = activeSession && activeSession.status === 'broadcasting';
 
@@ -65,20 +92,20 @@ export const FacultyMobileApp: React.FC = () => {
       <header className="hidden md:flex sticky top-0 z-50 bg-white border-b border-slate-200 px-6 lg:px-10 py-3.5 items-center justify-between shadow-xs">
         {/* Brand & Identity */}
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-[#03130E] border border-indigo-500/30 flex items-center justify-center shadow-xs">
-            <Radio size={18} className="text-indigo-500 animate-pulse" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center shadow-xs">
+            <Radio size={18} className="text-white animate-pulse" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-base text-slate-900 tracking-tight leading-none">
-                AttendEase
+                Smart Attendance
               </span>
               <span className="px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold">
-                Faculty Workspace
+                Faculty
               </span>
             </div>
-            <span className="text-[10px] text-slate-500 font-mono">
-              Dept: {selectedFaculty.department || 'Computer Science'}
+            <span className="text-[10px] text-slate-500 font-medium">
+              {facultyName} &bull; <span className="font-mono font-semibold text-slate-700">{employeeId}</span> &bull; {facultyEmail}
             </span>
           </div>
         </div>
@@ -90,11 +117,10 @@ export const FacultyMobileApp: React.FC = () => {
               setActiveScreen('home');
               setActiveTab('home');
             }}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'home' && activeScreen === 'home'
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'home' && activeScreen === 'home'
                 ? 'bg-white text-indigo-700 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
           >
             <Home size={15} />
             <span>Classes</span>
@@ -105,14 +131,51 @@ export const FacultyMobileApp: React.FC = () => {
               setActiveScreen('home');
               setActiveTab('timetable');
             }}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'timetable'
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'timetable'
                 ? 'bg-white text-indigo-700 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
           >
             <Calendar size={15} />
-            <span>Weekly Schedule</span>
+            <span>Schedule</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveScreen('home');
+              setActiveTab('approvals');
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer relative ${activeTab === 'approvals' || activeTab === 'history'
+                ? 'bg-white text-indigo-700 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+              }`}
+          >
+            <ClipboardCheck size={15} />
+            <span>Approvals</span>
+            {pendingApprovalsCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[10px] font-bold animate-pulse">
+                {pendingApprovalsCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveScreen('home');
+              setActiveTab('leave');
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer relative ${activeTab === 'leave'
+                ? 'bg-white text-indigo-700 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+              }`}
+          >
+            <CalendarDays size={15} />
+            <span>My Leave</span>
+            {pendingFacultyLeavesCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[10px] font-bold animate-pulse">
+                {pendingFacultyLeavesCount}
+              </span>
+            )}
           </button>
 
           <button
@@ -120,14 +183,13 @@ export const FacultyMobileApp: React.FC = () => {
               setActiveScreen('home');
               setActiveTab('history');
             }}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'history'
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'history'
                 ? 'bg-white text-indigo-700 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
           >
             <History size={15} />
-            <span>Rosters & Logs</span>
+            <span>Logs</span>
           </button>
 
           <button
@@ -135,14 +197,13 @@ export const FacultyMobileApp: React.FC = () => {
               setActiveScreen('home');
               setActiveTab('profile');
             }}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'profile'
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${activeTab === 'profile'
                 ? 'bg-white text-indigo-700 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
           >
             <User size={15} />
-            <span>Faculty Profile</span>
+            <span>Profile</span>
           </button>
         </nav>
 
@@ -185,11 +246,13 @@ export const FacultyMobileApp: React.FC = () => {
 
           {/* User Avatar + Fixed Logout Button */}
           <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
-            <img
-              src={selectedFaculty.photoUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150'}
-              alt=""
-              className="w-8 h-8 rounded-full object-cover border border-indigo-500 shadow-xs"
-            />
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-800 text-white flex items-center justify-center text-xs font-black shadow-xs ring-2 ring-indigo-100 shrink-0">
+              {getInitials(facultyName)}
+            </div>
+            <div className="hidden lg:block text-left mr-1">
+              <span className="text-xs font-bold text-slate-800 block leading-tight truncate max-w-[140px]">{facultyName}</span>
+              <span className="text-[10px] text-slate-400 block leading-tight truncate max-w-[140px]">{facultyEmail}</span>
+            </div>
             <button
               onClick={handleLogout}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/70 text-xs font-bold transition cursor-pointer shadow-xs active:scale-95"
@@ -209,24 +272,22 @@ export const FacultyMobileApp: React.FC = () => {
         {/* Left: Avatar + Greeting & Name + Role Badge */}
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="relative shrink-0">
-            <img
-              src={selectedFaculty.photoUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150'}
-              alt={selectedFaculty.name}
-              className="w-9 h-9 rounded-full object-cover border-2 border-indigo-500 shadow-xs"
-            />
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-800 text-white flex items-center justify-center text-xs font-black border-2 border-indigo-200 shadow-xs">
+              {getInitials(facultyName)}
+            </div>
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-extrabold text-slate-900 truncate leading-none">
-                {selectedFaculty.name}
+                {facultyName}
               </span>
               <span className="px-1.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-[9px] font-bold shrink-0 leading-none">
                 Faculty
               </span>
             </div>
             <span className="text-[10px] text-slate-500 font-medium block truncate mt-0.5">
-              {selectedFaculty.department || 'Computer Science'} • {selectedFaculty.employeeId || 'FAC-101'}
+              {employeeId} • {facultyEmail}
             </span>
           </div>
         </div>
@@ -267,12 +328,16 @@ export const FacultyMobileApp: React.FC = () => {
             <FacultyLiveMonitor onEndSession={handleEndSession} />
           ) : activeScreen === 'summary' ? (
             <FacultySummary onDone={handleSummaryDone} />
+          ) : activeTab === 'leave' ? (
+            <FacultyLeave />
+          ) : activeTab === 'approvals' ? (
+            <FacultyApprovals />
           ) : activeTab === 'history' ? (
             <FacultyHistory />
           ) : activeTab === 'profile' ? (
             <FacultyProfile />
           ) : activeTab === 'timetable' ? (
-            <FacultyHistory />
+            <FacultySchedule onStartAttendanceClick={handleStartAttendanceClick} />
           ) : (
             <FacultyHome onStartAttendanceClick={handleStartAttendanceClick} />
           )}
@@ -287,9 +352,8 @@ export const FacultyMobileApp: React.FC = () => {
           <div className="pointer-events-auto px-4 py-2 rounded-full border border-slate-200/90 bg-white/95 shadow-xl backdrop-blur-md flex items-center justify-between">
             <button
               onClick={() => setActiveTab('home')}
-              className={`flex flex-col items-center gap-0.5 transition cursor-pointer ${
-                activeTab === 'home' ? 'text-indigo-600 font-bold' : 'text-slate-500 hover:text-slate-900'
-              }`}
+              className={`flex flex-col items-center gap-0.5 transition cursor-pointer ${activeTab === 'home' ? 'text-indigo-600 font-bold' : 'text-slate-500 hover:text-slate-900'
+                }`}
             >
               <Home size={18} />
               <span className="text-[10px]">Home</span>
@@ -297,9 +361,8 @@ export const FacultyMobileApp: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('timetable')}
-              className={`flex flex-col items-center gap-0.5 transition cursor-pointer ${
-                activeTab === 'timetable' ? 'text-indigo-600 font-bold' : 'text-slate-500 hover:text-slate-900'
-              }`}
+              className={`flex flex-col items-center gap-0.5 transition cursor-pointer ${activeTab === 'timetable' ? 'text-indigo-600 font-bold' : 'text-slate-500 hover:text-slate-900'
+                }`}
             >
               <Calendar size={18} />
               <span className="text-[10px]">Schedule</span>
@@ -325,20 +388,45 @@ export const FacultyMobileApp: React.FC = () => {
             </div>
 
             <button
-              onClick={() => setActiveTab('history')}
-              className={`flex flex-col items-center gap-0.5 transition cursor-pointer ${
-                activeTab === 'history' ? 'text-indigo-600 font-bold' : 'text-slate-500 hover:text-slate-900'
-              }`}
+              onClick={() => setActiveTab('approvals')}
+              className={`flex flex-col items-center gap-0.5 transition cursor-pointer relative ${activeTab === 'approvals' || activeTab === 'history'
+                  ? 'text-indigo-600 font-bold'
+                  : 'text-slate-500 hover:text-slate-900'
+                }`}
             >
-              <History size={18} />
-              <span className="text-[10px]">History</span>
+              <div className="relative">
+                <ClipboardCheck size={18} />
+                {pendingApprovalsCount > 0 && (
+                  <span className="absolute -top-1 -right-2 w-3.5 h-3.5 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {pendingApprovalsCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px]">Approvals</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('leave')}
+              className={`flex flex-col items-center gap-0.5 transition cursor-pointer relative ${activeTab === 'leave'
+                  ? 'text-indigo-600 font-bold'
+                  : 'text-slate-500 hover:text-slate-900'
+                }`}
+            >
+              <div className="relative">
+                <CalendarDays size={18} />
+                {pendingFacultyLeavesCount > 0 && (
+                  <span className="absolute -top-1 -right-2 w-3.5 h-3.5 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {pendingFacultyLeavesCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px]">My Leave</span>
             </button>
 
             <button
               onClick={() => setActiveTab('profile')}
-              className={`flex flex-col items-center gap-0.5 transition cursor-pointer ${
-                activeTab === 'profile' ? 'text-indigo-600 font-bold' : 'text-slate-500 hover:text-slate-900'
-              }`}
+              className={`flex flex-col items-center gap-0.5 transition cursor-pointer ${activeTab === 'profile' ? 'text-indigo-600 font-bold' : 'text-slate-500 hover:text-slate-900'
+                }`}
             >
               <User size={18} />
               <span className="text-[10px]">Profile</span>

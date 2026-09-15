@@ -8,6 +8,14 @@ interface FacultySummaryProps {
   onDone: () => void;
 }
 
+const getInitials = (name: string) => {
+  const clean = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.)\s+/i, '').trim();
+  const parts = clean.split(' ').filter(Boolean);
+  if (parts.length === 0) return 'ST';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 export const FacultySummary: React.FC<FacultySummaryProps> = ({ onDone }) => {
   const { activeSession, attendanceRecords, manualMarkPresent } = useSessionStore();
   const { students } = useAppStore();
@@ -113,11 +121,9 @@ export const FacultySummary: React.FC<FacultySummaryProps> = ({ onDone }) => {
                 className="p-2.5 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-xs"
               >
                 <div className="flex items-center gap-2.5">
-                  <img
-                    src={std.photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
-                    alt=""
-                    className="w-7 h-7 rounded-full object-cover border border-slate-100"
-                  />
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-50 to-slate-100 border border-indigo-200/60 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs">
+                    {getInitials(std.name)}
+                  </div>
                   <div>
                     <span className="font-bold text-xs text-slate-900 block">{std.name}</span>
                     <span className="text-[10px] font-mono text-slate-500">{std.rollNumber}</span>
@@ -135,11 +141,9 @@ export const FacultySummary: React.FC<FacultySummaryProps> = ({ onDone }) => {
                 className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between"
               >
                 <div className="flex items-center gap-2.5">
-                  <img
-                    src={std.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'}
-                    alt=""
-                    className="w-7 h-7 rounded-full object-cover grayscale opacity-70"
-                  />
+                  <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200/80 text-slate-500 flex items-center justify-center text-xs font-bold shrink-0">
+                    {getInitials(std.name)}
+                  </div>
                   <div>
                     <span className="font-bold text-xs text-slate-700 block">{std.name}</span>
                     <span className="text-[10px] font-mono text-slate-400">{std.rollNumber}</span>
@@ -159,10 +163,10 @@ export const FacultySummary: React.FC<FacultySummaryProps> = ({ onDone }) => {
 
       {/* Manual Override Modal */}
       {overrideStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 backdrop-blur-xs p-4">
           <div className="w-full max-w-sm bg-white p-5 border border-slate-200 rounded-3xl shadow-2xl text-slate-900">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-3">
-              <h4 className="font-bold text-slate-900 text-sm">Manual Override Check-In</h4>
+              <h4 className="font-bold text-slate-900 text-sm">Manual Check-In</h4>
               <button
                 onClick={() => setOverrideStudent(null)}
                 className="p-1 text-slate-400 hover:text-slate-700"
@@ -171,11 +175,11 @@ export const FacultySummary: React.FC<FacultySummaryProps> = ({ onDone }) => {
               </button>
             </div>
             <p className="text-xs text-slate-600 mb-3">
-              Override absence for <strong className="text-slate-900">{overrideStudent.name}</strong> ({overrideStudent.rollNumber}).
+              Mark attendance for <strong className="text-slate-900">{overrideStudent.name}</strong> ({overrideStudent.rollNumber}).
             </p>
             <form onSubmit={handleApplyOverride} className="space-y-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Audit Reason Note</label>
+                <label className="font-semibold text-slate-700 block mb-1">Reason</label>
                 <input
                   type="text"
                   value={overrideReason}
@@ -196,7 +200,7 @@ export const FacultySummary: React.FC<FacultySummaryProps> = ({ onDone }) => {
                   type="submit"
                   className="px-4 py-1.5 rounded-full bg-emerald-600 text-white font-bold shadow"
                 >
-                  Confirm Override
+                  Confirm
                 </button>
               </div>
             </form>
@@ -204,13 +208,13 @@ export const FacultySummary: React.FC<FacultySummaryProps> = ({ onDone }) => {
         </div>
       )}
 
-      {/* Bottom Buttons: "Save & Submit" (gradient) and "Export" (outline) */}
+      {/* Bottom Buttons: "Submit Attendance" (gradient) and "Export PDF" (outline) */}
       <div className="space-y-2 pt-3 border-t border-slate-100">
         <button
           onClick={onDone}
           className="w-full py-3 rounded-full font-bold text-xs text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:brightness-110 shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer"
         >
-          <span>Save & Submit to Registrar</span>
+          <span>Submit Attendance</span>
           <ArrowRight size={14} />
         </button>
         <button
@@ -218,7 +222,7 @@ export const FacultySummary: React.FC<FacultySummaryProps> = ({ onDone }) => {
           className="w-full py-2.5 rounded-full font-semibold text-xs text-slate-700 hover:bg-slate-50 border border-slate-200 flex items-center justify-center gap-2 transition cursor-pointer"
         >
           <Download size={13} />
-          <span>Export Session Audit Sheet</span>
+          <span>Export PDF</span>
         </button>
       </div>
     </div>

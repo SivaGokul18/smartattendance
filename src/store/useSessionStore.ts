@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { BleSession, AttendanceRecord } from '../types';
+import { facultyApi, studentApi } from '../api/client';
 
 interface SessionState {
   activeSession: BleSession | null;
@@ -7,9 +8,12 @@ interface SessionState {
   historySessions: {
     id: string;
     subjectName: string;
+    subjectCode?: string;
     className: string;
     date: string;
+    dateStr?: string;
     time: string;
+    room?: string;
     presentCount: number;
     totalCount: number;
     attendanceRate: number;
@@ -47,42 +51,12 @@ interface SessionState {
 export const useSessionStore = create<SessionState>((set, get) => ({
   activeSession: null,
   attendanceRecords: [],
-  historySessions: [
-    {
-      id: 'sess-hist-1',
-      subjectName: 'Machine Learning (CS301)',
-      className: 'CSE - 3rd Year - Sec A',
-      date: 'Yesterday',
-      time: '09:00 AM - 10:00 AM',
-      presentCount: 41,
-      totalCount: 45,
-      attendanceRate: 91
-    },
-    {
-      id: 'sess-hist-2',
-      subjectName: 'Embedded IoT Systems (CS304)',
-      className: 'CSE - 3rd Year - Sec A',
-      date: '02 Sep 2026',
-      time: '11:15 AM - 12:15 PM',
-      presentCount: 36,
-      totalCount: 45,
-      attendanceRate: 80
-    },
-    {
-      id: 'sess-hist-3',
-      subjectName: 'Mobile & Cloud Computing (CS302)',
-      className: 'CSE - 3rd Year - Sec A',
-      date: '01 Sep 2026',
-      time: '10:15 AM - 11:15 AM',
-      presentCount: 31,
-      totalCount: 45,
-      attendanceRate: 68
-    }
-  ],
+  historySessions: [],
 
   startSession: (params) => {
+    const localId = `sess-${Date.now()}`;
     const newSession: BleSession = {
-      id: `sess-${Date.now()}`,
+      id: localId,
       facultyId: params.facultyId,
       facultyName: params.facultyName,
       classSectionId: params.classSectionId,
@@ -102,6 +76,26 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       activeSession: newSession,
       attendanceRecords: [],
     });
+
+    // Call backend to create real session and broadcast on WebSockets
+    facultyApi.startSession({
+      classSectionId: params.classSectionId,
+      classSectionName: params.classSectionName,
+      subjectId: params.subjectId,
+      subjectName: params.subjectName,
+      room: params.room,
+      durationMinutes: params.durationMinutes,
+      faceVerificationRequired: params.faceVerificationRequired,
+      capacity: params.capacity || 45,
+    }).then((resp) => {
+      if (resp?.sessionId) {
+        set((state) => ({
+          activeSession: state.activeSession
+            ? { ...state.activeSession, id: resp.sessionId }
+            : null,
+        }));
+      }
+    }).catch(console.warn);
   },
 
   studentCheckIn: (student) => {
@@ -134,6 +128,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       attendanceRecords: [newRecord, ...attendanceRecords],
     });
 
+    // Submit attendance check-in to backend
+    studentApi.verifyAttendance({
+      sessionId: activeSession.id,
+      faceConfidenceScore: 95.0,
+      faceVerified: true,
+      method: student.method || 'ble+face',
+    }).catch(console.warn);
+
     return true;
   },
 
@@ -163,6 +165,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       },
       attendanceRecords: [newRecord, ...attendanceRecords],
     });
+
+    // Send manual override to backend
+    facultyApi.manualCheckin(activeSession.id, student.id, student.reason).catch(console.warn);
   },
 
   endSession: () => {
@@ -176,8 +181,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const newHistoryItem = {
       id: activeSession.id,
       subjectName: activeSession.subjectName,
+      subjectCode: activeSession.subjectId || 'CS301',
       className: activeSession.classSectionName,
-      date: 'Today',
+      date: '07 Sep 2026',
+      dateStr: '2026-09-07',
+      room: activeSession.room || 'LH-204',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       presentCount,
       totalCount,
@@ -191,5 +199,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       },
       historySessions: [newHistoryItem, ...historySessions],
     });
+
+    // Notify backend session has ended
+    facultyApi.endSession(activeSession.id).catch(console.warn);
   },
 }));

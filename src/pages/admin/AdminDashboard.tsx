@@ -8,32 +8,34 @@ export const AdminDashboard: React.FC = () => {
   const { activeSession, attendanceRecords } = useSessionStore();
 
   const activeSessionCount = activeSession && activeSession.status === 'broadcasting' ? 1 : 0;
-  const avgAttendance = 89.4;
+  const avgAttendance = students.length > 0
+    ? (students.reduce((acc, s) => acc + (s.attendanceRate || 0), 0) / students.length).toFixed(1)
+    : '0.0';
 
   const kpis = [
     {
       title: 'Total Students',
       value: students.length.toString(),
-      trend: '+12% this term',
+      trend: students.length > 0 ? '+12% this term' : 'No students enrolled',
       icon: <GraduationCap size={20} className="text-indigo-600" />,
       bgIcon: 'bg-indigo-50',
-      spark: [40, 48, 55, 60, 68, 75, 82, 88, 92]
+      spark: students.length > 0 ? [40, 48, 55, 60, 68, 75, 82, 88, 92] : [0, 0, 0, 0, 0, 0, 0, 0, 0]
     },
     {
       title: 'Total Faculty',
       value: faculty.length.toString(),
-      trend: '100% active staff',
+      trend: faculty.length > 0 ? '100% active staff' : 'No faculty registered',
       icon: <Users size={20} className="text-violet-600" />,
       bgIcon: 'bg-violet-50',
-      spark: [4, 4, 5, 5, 6, 7, 7, 8, 8]
+      spark: faculty.length > 0 ? [4, 4, 5, 5, 6, 7, 7, 8, 8] : [0, 0, 0, 0, 0, 0, 0, 0, 0]
     },
     {
       title: "Today's Attendance",
       value: `${avgAttendance}%`,
-      trend: '+3.2% vs yesterday',
+      trend: students.length > 0 ? '+3.2% vs yesterday' : 'No records yet',
       icon: <Percent size={20} className="text-emerald-600" />,
       bgIcon: 'bg-emerald-50',
-      spark: [78, 81, 84, 86, 85, 87, 89, 91, 89.4]
+      spark: students.length > 0 ? [78, 81, 84, 86, 85, 87, 89, 91, parseFloat(avgAttendance)] : [0, 0, 0, 0, 0, 0, 0, 0, 0]
     },
     {
       title: 'Active BLE Broadcasts',
@@ -41,15 +43,35 @@ export const AdminDashboard: React.FC = () => {
       trend: activeSessionCount > 0 ? 'Live in progress' : 'Standby mode',
       icon: <Radio size={20} className="text-amber-600" />,
       bgIcon: 'bg-amber-50',
-      spark: [1, 2, 0, 3, 2, 4, 1, 2, activeSessionCount]
+      spark: activeSessionCount > 0 ? [1, 2, 0, 3, 2, 4, 1, 2, activeSessionCount] : [0, 0, 0, 0, 0, 0, 0, 0, 0]
     }
   ];
 
+  // Dynamic department attendance
+  const departmentAttendance = React.useMemo(() => {
+    if (students.length === 0) return [];
+    const map: Record<string, { sum: number; count: number }> = {};
+    students.forEach((s) => {
+      const dept = s.department || 'General';
+      if (!map[dept]) map[dept] = { sum: 0, count: 0 };
+      map[dept].count += 1;
+      map[dept].sum += s.attendanceRate ?? 100;
+    });
+    const colors = ['bg-indigo-600', 'bg-emerald-600', 'bg-violet-600', 'bg-amber-600'];
+    return Object.entries(map).slice(0, 4).map(([name, val], idx) => ({
+      name,
+      pct: Math.round(val.sum / val.count),
+      color: colors[idx % colors.length]
+    }));
+  }, [students]);
+
   // 30 days attendance points
-  const trendDays = Array.from({ length: 30 }, (_, i) => ({
-    day: i + 1,
-    rate: Math.min(98, Math.max(74, 82 + Math.sin(i * 0.4) * 10 + (i % 5)))
-  }));
+  const trendDays = students.length > 0
+    ? Array.from({ length: 30 }, (_, i) => ({
+        day: i + 1,
+        rate: Math.min(98, Math.max(74, 82 + Math.sin(i * 0.4) * 10 + (i % 5)))
+      }))
+    : [];
 
   return (
     <div className="space-y-6">
@@ -137,65 +159,73 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* SVG Line Chart */}
-          <div className="w-full h-56 relative flex flex-col justify-end">
-            <svg viewBox="0 0 600 180" className="w-full h-48 overflow-visible">
-              <defs>
-                <linearGradient id="trendGradientLight" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#4F46E5" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="#4F46E5" stopOpacity="0.0" />
-                </linearGradient>
-              </defs>
-
-              {/* Target 75% threshold guide */}
-              <line x1="0" y1="90" x2="600" y2="90" stroke="#CBD5E1" strokeDasharray="4 4" strokeWidth="1" />
-              <text x="5" y="85" fill="#94A3B8" fontSize="10">Target Threshold: 75%</text>
-
-              {/* Area fill */}
-              <path
-                d={`M 0,180 ${trendDays
-                  .map((d, i) => `L ${(i / (trendDays.length - 1)) * 600},${180 - (d.rate - 60) * 4}`)
-                  .join(' ')} L 600,180 Z`}
-                fill="url(#trendGradientLight)"
-              />
-
-              {/* Stroke line */}
-              <path
-                d={`M 0,${180 - (trendDays[0].rate - 60) * 4} ${trendDays
-                  .map((d, i) => `L ${(i / (trendDays.length - 1)) * 600},${180 - (d.rate - 60) * 4}`)
-                  .join(' ')}`}
-                fill="none"
-                stroke="#4F46E5"
-                strokeWidth="3"
-                strokeLinecap="round"
-              />
-
-              {/* Highlight recent points */}
-              {trendDays.map((d, i) => {
-                if (i % 4 !== 0 && i !== trendDays.length - 1) return null;
-                const cx = (i / (trendDays.length - 1)) * 600;
-                const cy = 180 - (d.rate - 60) * 4;
-                return (
-                  <circle
-                    key={i}
-                    cx={cx}
-                    cy={cy}
-                    r="4"
-                    fill="#10B981"
-                    stroke="#FFFFFF"
-                    strokeWidth="2"
-                  />
-                );
-              })}
-            </svg>
-
-            <div className="flex justify-between text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-100">
-              <span>Day 1 (Aug 05)</span>
-              <span>Day 10 (Aug 15)</span>
-              <span>Day 20 (Aug 25)</span>
-              <span>Today (Sep 04)</span>
+          {/* SVG Line Chart or Empty State */}
+          {trendDays.length === 0 ? (
+            <div className="w-full h-56 flex flex-col items-center justify-center text-center p-6 bg-slate-50 rounded-2xl border border-slate-100">
+              <TrendingUp size={24} className="text-slate-300 mb-1" />
+              <p className="text-xs font-semibold text-slate-600">No attendance trends recorded yet</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Daily attendance curve will automatically plot as sessions occur.</p>
             </div>
-          </div>
+          ) : (
+            <div className="w-full h-56 relative flex flex-col justify-end">
+              <svg viewBox="0 0 600 180" className="w-full h-48 overflow-visible">
+                <defs>
+                  <linearGradient id="trendGradientLight" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4F46E5" stopOpacity="0.25" />
+                    <stop offset="100%" stopColor="#4F46E5" stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
+
+                {/* Target 75% threshold guide */}
+                <line x1="0" y1="90" x2="600" y2="90" stroke="#CBD5E1" strokeDasharray="4 4" strokeWidth="1" />
+                <text x="5" y="85" fill="#94A3B8" fontSize="10">Target Threshold: 75%</text>
+
+                {/* Area fill */}
+                <path
+                  d={`M 0,180 ${trendDays
+                    .map((d, i) => `L ${(i / (trendDays.length - 1)) * 600},${180 - (d.rate - 60) * 4}`)
+                    .join(' ')} L 600,180 Z`}
+                  fill="url(#trendGradientLight)"
+                />
+
+                {/* Stroke line */}
+                <path
+                  d={`M 0,${180 - (trendDays[0].rate - 60) * 4} ${trendDays
+                    .map((d, i) => `L ${(i / (trendDays.length - 1)) * 600},${180 - (d.rate - 60) * 4}`)
+                    .join(' ')}`}
+                  fill="none"
+                  stroke="#4F46E5"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+
+                {/* Highlight recent points */}
+                {trendDays.map((d, i) => {
+                  if (i % 4 !== 0 && i !== trendDays.length - 1) return null;
+                  const cx = (i / (trendDays.length - 1)) * 600;
+                  const cy = 180 - (d.rate - 60) * 4;
+                  return (
+                    <circle
+                      key={i}
+                      cx={cx}
+                      cy={cy}
+                      r="4"
+                      fill="#10B981"
+                      stroke="#FFFFFF"
+                      strokeWidth="2"
+                    />
+                  );
+                })}
+              </svg>
+
+              <div className="flex justify-between text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-100">
+                <span>Day 1 (Aug 05)</span>
+                <span>Day 10 (Aug 15)</span>
+                <span>Day 20 (Aug 25)</span>
+                <span>Today (Sep 04)</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Live Active BLE Sessions Widget */}
@@ -272,19 +302,19 @@ export const AdminDashboard: React.FC = () => {
               Department Attendance
             </h4>
             <div className="space-y-1.5">
-              {[
-                { name: 'Computer Science', pct: 92, color: 'bg-indigo-600' },
-                { name: 'AI & Data Science', pct: 94, color: 'bg-emerald-600' },
-                { name: 'Information Tech', pct: 84, color: 'bg-violet-600' },
-              ].map((dep, idx) => (
-                <div key={idx} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${dep.color}`}></span>
-                    <span className="text-slate-700 font-medium">{dep.name}</span>
+              {departmentAttendance.length === 0 ? (
+                <p className="text-xs text-slate-400 py-1">No departments enrolled yet</p>
+              ) : (
+                departmentAttendance.map((dep, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-full ${dep.color}`}></span>
+                      <span className="text-slate-700 font-medium">{dep.name}</span>
+                    </div>
+                    <span className="font-extrabold text-slate-900">{dep.pct}%</span>
                   </div>
-                  <span className="font-extrabold text-slate-900">{dep.pct}%</span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -333,24 +363,11 @@ export const AdminDashboard: React.FC = () => {
                   </tr>
                 ))
               ) : (
-                students.slice(0, 4).map((std, i) => (
-                  <tr key={std.id} className="hover:bg-slate-50 transition">
-                    <td className="py-3.5 px-3 font-semibold text-slate-900">{std.name}</td>
-                    <td className="py-3.5 px-3 font-mono text-slate-600">{std.rollNumber}</td>
-                    <td className="py-3.5 px-3 text-slate-600">{std.department}</td>
-                    <td className="py-3.5 px-3">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                        ble + face
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-3 font-mono text-slate-500">09:0{i + 2} AM</td>
-                    <td className="py-3.5 px-3 text-right">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        Verified
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
+                    No recent attendance activity recorded yet.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>

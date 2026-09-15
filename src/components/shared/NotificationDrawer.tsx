@@ -37,7 +37,7 @@ export const NotificationDrawer: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition-opacity duration-300">
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/25 backdrop-blur-xs transition-opacity duration-300">
       <div className="w-full max-w-md h-full bg-white border-l border-slate-200 shadow-2xl flex flex-col p-5 overflow-hidden animate-in slide-in-from-right duration-200">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
@@ -47,7 +47,6 @@ export const NotificationDrawer: React.FC = () => {
             </div>
             <div>
               <h3 className="font-bold text-slate-900 text-base">Notifications</h3>
-              <p className="text-xs text-slate-500">Activity & attendance updates</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

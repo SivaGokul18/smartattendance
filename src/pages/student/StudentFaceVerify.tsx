@@ -60,11 +60,33 @@ export const StudentFaceVerify: React.FC<StudentFaceVerifyProps> = ({
       {/* Camera Preview with Oval Face Guide & Laser Beam */}
       <div className="relative my-auto w-full max-w-[280px] h-[340px] mx-auto rounded-3xl overflow-hidden border border-slate-200 shadow-xl flex items-center justify-center bg-slate-900">
         {/* Simulated Camera feed */}
-        <img
-          src={selectedStudent.photoUrl || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400'}
-          alt="Student"
-          className="w-full h-full object-cover filter contrast-105"
-        />
+        {selectedStudent.photoUrl ? (
+          <img
+            src={selectedStudent.photoUrl}
+            alt="Student"
+            className="w-full h-full object-cover filter contrast-105"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 relative">
+            <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px]" />
+            <div className="relative flex flex-col items-center">
+              <div className="w-28 h-32 rounded-full border border-teal-500/40 bg-teal-500/10 flex flex-col items-center justify-center relative shadow-[0_0_25px_rgba(20,184,166,0.25)]">
+                <div className="flex gap-7 mb-3">
+                  <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-ping" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-ping" />
+                </div>
+                <div className="w-1.5 h-4 rounded-full bg-teal-300/80 mb-2" />
+                <div className="w-8 h-1.5 rounded-full bg-teal-400/80" />
+              </div>
+              <span className="mt-4 text-[11px] font-mono tracking-wider text-teal-400 uppercase font-bold">
+                {selectedStudent.name}
+              </span>
+              <span className="text-[10px] font-mono text-slate-400 mt-0.5">
+                {selectedStudent.rollNumber}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Soft-edged Oval Face Guide Overlay */}
         <div
@@ -103,7 +125,7 @@ export const StudentFaceVerify: React.FC<StudentFaceVerifyProps> = ({
         </div>
 
         {/* Neural Confidence pill */}
-        <div className="absolute top-3 left-3 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur text-[10px] font-mono font-bold text-white border border-white/10">
+        <div className="absolute top-3 left-3 px-2.5 py-0.5 rounded-full bg-slate-900/60 backdrop-blur text-[10px] font-mono font-bold text-white border border-white/10">
           Neural: {confidence}%
         </div>
       </div>

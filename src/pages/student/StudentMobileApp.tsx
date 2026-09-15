@@ -23,10 +23,22 @@ import { StudentProfile } from './StudentProfile';
 import { useAppStore } from '../../store/useAppStore';
 import { useSessionStore } from '../../store/useSessionStore';
 
+const getInitials = (name: string) => {
+  const clean = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.)\s+/i, '').trim();
+  const parts = clean.split(' ').filter(Boolean);
+  if (parts.length === 0) return 'ST';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 export const StudentMobileApp: React.FC = () => {
   const navigate = useNavigate();
-  const { selectedStudent, setNotificationOpen } = useAppStore();
+  const { selectedStudent, currentUser, setNotificationOpen } = useAppStore();
   const { activeSession } = useSessionStore();
+
+  const studentName = currentUser?.name || selectedStudent?.name || 'Student';
+  const studentEmail = currentUser?.email || selectedStudent?.email || 'student@campus.edu';
+  const studentRoll = currentUser?.rollNumber || selectedStudent?.rollNumber || '—';
 
   const [activeTab, setActiveTab] = useState<'home' | 'booking' | 'history' | 'profile'>('home');
   const [flowState, setFlowState] = useState<
@@ -70,20 +82,20 @@ export const StudentMobileApp: React.FC = () => {
       <header className="hidden md:flex sticky top-0 z-50 bg-white border-b border-slate-200 px-6 lg:px-10 py-3.5 items-center justify-between shadow-xs">
         {/* Brand & Identity */}
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-[#04140D] border border-emerald-500/30 flex items-center justify-center shadow-xs">
-            <Radio size={18} className="text-emerald-400 animate-pulse" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-600 text-white flex items-center justify-center shadow-xs">
+            <Radio size={18} className="text-white animate-pulse" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-base text-slate-900 tracking-tight leading-none">
-                AttendEase
+                Smart Attendance
               </span>
               <span className="px-2 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-[10px] font-bold">
                 Student App
               </span>
             </div>
-            <span className="text-[10px] text-slate-500 font-mono">
-              Roll: {selectedStudent.rollNumber || '2026CS101'}
+            <span className="text-[10px] text-slate-500 font-medium">
+              {studentName} &bull; <span className="font-mono font-semibold text-slate-700">{studentRoll}</span> &bull; {studentEmail}
             </span>
           </div>
         </div>
@@ -111,7 +123,7 @@ export const StudentMobileApp: React.FC = () => {
             }`}
           >
             <Calendar size={15} />
-            <span>Lab Booking</span>
+            <span>Class Schedule</span>
           </button>
 
           <button
@@ -167,11 +179,13 @@ export const StudentMobileApp: React.FC = () => {
 
           {/* User Avatar + Fixed Logout Button */}
           <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
-            <img
-              src={selectedStudent.photoUrl || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150'}
-              alt=""
-              className="w-8 h-8 rounded-full object-cover border border-teal-500 shadow-xs"
-            />
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-600 to-teal-800 text-white flex items-center justify-center text-xs font-black shadow-xs ring-2 ring-teal-100 shrink-0">
+              {getInitials(studentName)}
+            </div>
+            <div className="hidden lg:block text-left mr-1">
+              <span className="text-xs font-bold text-slate-800 block leading-tight truncate max-w-[130px]">{studentName}</span>
+              <span className="text-[10px] text-slate-400 block leading-tight truncate max-w-[130px]">{studentEmail}</span>
+            </div>
             <button
               onClick={handleLogout}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/70 text-xs font-bold transition cursor-pointer shadow-xs active:scale-95"
@@ -191,24 +205,22 @@ export const StudentMobileApp: React.FC = () => {
         {/* Left: Avatar + Greeting & Name + Role Badge */}
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="relative shrink-0">
-            <img
-              src={selectedStudent.photoUrl || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150'}
-              alt={selectedStudent.name}
-              className="w-9 h-9 rounded-full object-cover border-2 border-teal-500 shadow-xs"
-            />
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-600 to-teal-800 text-white flex items-center justify-center text-xs font-black border-2 border-teal-200 shadow-xs">
+              {getInitials(studentName)}
+            </div>
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-extrabold text-slate-900 truncate leading-none">
-                {selectedStudent.name}
+                {studentName}
               </span>
               <span className="px-1.5 py-0.5 rounded-full bg-teal-50 border border-teal-200/80 text-teal-700 text-[9px] font-bold shrink-0 leading-none">
                 Student
               </span>
             </div>
             <span className="text-[10px] text-slate-500 font-medium block truncate mt-0.5">
-              Roll: {selectedStudent.rollNumber || '2026CS101'} • Year {selectedStudent.year || 3}
+              {studentRoll} • {studentEmail}
             </span>
           </div>
         </div>
@@ -290,7 +302,7 @@ export const StudentMobileApp: React.FC = () => {
               }`}
             >
               <Calendar size={18} />
-              <span className="text-[10px]">Labs</span>
+              <span className="text-[10px]">Schedule</span>
             </button>
 
             {/* Raised Center Action Button */}

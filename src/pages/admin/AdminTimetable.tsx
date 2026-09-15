@@ -1,20 +1,39 @@
 import React, { useState } from 'react';
-import { Plus, Copy, AlertTriangle, X, Clock, MapPin, CheckCircle2 } from 'lucide-react';
+import { Plus, Copy, AlertTriangle, X, Clock, MapPin, CheckCircle2, Database, Calendar } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { TimetableSlot } from '../../types';
+import { AdminTimetableSyncModal } from '../../components/admin/AdminTimetableSyncModal';
 
 export const AdminTimetable: React.FC = () => {
-  const { timetable, addTimetableSlot, deleteTimetableSlot, subjects, faculty, classSections } = useAppStore();
+  const { timetable, addTimetableSlot, deleteTimetableSlot, loadWeeklyTimetableFromDB, subjects, faculty, classSections, syncWithBackend } = useAppStore();
 
-  const [selectedClassId, setSelectedClassId] = useState('cls-1');
+  const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [activeSlotTarget, setActiveSlotTarget] = useState<{ day: TimetableSlot['day']; time: string } | null>(null);
 
   // Form states for new slot
-  const [modalSubjectId, setModalSubjectId] = useState('sub-1');
-  const [modalFacultyId, setModalFacultyId] = useState('fac-1');
-  const [modalRoom, setModalRoom] = useState('LH-204');
+  const [modalSubjectId, setModalSubjectId] = useState<string>('');
+  const [modalFacultyId, setModalFacultyId] = useState<string>('');
+  const [modalRoom, setModalRoom] = useState('Room 101');
   const [modalDuration, setModalDuration] = useState('60');
+  const [dbSuccessMessage, setDbSuccessMessage] = useState<string | null>(null);
+
+  // Auto-sync select options to real DB entities
+  React.useEffect(() => {
+    if (classSections.length > 0 && (!selectedClassId || !classSections.some((c) => c.id === selectedClassId))) {
+      setSelectedClassId(classSections[0].id);
+    }
+  }, [classSections, selectedClassId]);
+
+  React.useEffect(() => {
+    if (subjects.length > 0 && (!modalSubjectId || !subjects.some((s) => s.id === modalSubjectId))) {
+      setModalSubjectId(subjects[0].id);
+    }
+    if (faculty.length > 0 && (!modalFacultyId || !faculty.some((f) => f.id === modalFacultyId))) {
+      setModalFacultyId(faculty[0].id);
+    }
+  }, [subjects, faculty, modalSubjectId, modalFacultyId]);
 
   const days: TimetableSlot['day'][] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const timeSlots = ['09:00', '10:15', '11:30', '14:00', '15:15'];
@@ -46,6 +65,12 @@ export const AdminTimetable: React.FC = () => {
 
   const handleCellClick = (day: TimetableSlot['day'], time: string) => {
     setActiveSlotTarget({ day, time });
+    if (subjects.length > 0 && (!modalSubjectId || !subjects.some(s => s.id === modalSubjectId))) {
+      setModalSubjectId(subjects[0].id);
+    }
+    if (faculty.length > 0 && (!modalFacultyId || !faculty.some(f => f.id === modalFacultyId))) {
+      setModalFacultyId(faculty[0].id);
+    }
     setIsModalOpen(true);
   };
 
@@ -58,22 +83,45 @@ export const AdminTimetable: React.FC = () => {
     const endH = Math.floor(endMinutes / 60).toString().padStart(2, '0');
     const endM = (endMinutes % 60).toString().padStart(2, '0');
 
+    const targetSub = subjects.find((s) => s.id === modalSubjectId);
+    const targetFac = faculty.find((f) => f.id === modalFacultyId);
+    const targetSec = classSections.find((c) => c.id === selectedClassId);
+
     addTimetableSlot({
       day: activeSlotTarget.day,
       startTime: activeSlotTarget.time,
       endTime: `${endH}:${endM}`,
-      subjectId: modalSubjectId,
-      facultyId: modalFacultyId,
-      classSectionId: selectedClassId,
-      room: modalRoom,
-      color: modalSubjectId === 'sub-1' ? '#4F46E5' : modalSubjectId === 'sub-2' ? '#7C3AED' : '#10B981',
+      subjectId: modalSubjectId || subjects[0]?.id,
+      facultyId: modalFacultyId || faculty[0]?.id,
+      classSectionId: selectedClassId || classSections[0]?.id,
+      room: modalRoom || 'Room 101',
+      color: '#4F46E5',
+      subjectCode: targetSub?.code,
+      subjectName: targetSub?.name,
+      facultyName: targetFac?.name,
+      classSectionName: targetSec?.name,
     });
 
+    setDbSuccessMessage(`Slot for ${targetSub?.code || 'Course'} assigned successfully!`);
+    setTimeout(() => setDbSuccessMessage(null), 3000);
     setIsModalOpen(false);
   };
 
   return (
     <div className="space-y-6 text-slate-900">
+      {/* DB Success Feedback Banner */}
+      {dbSuccessMessage && (
+        <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-emerald-600" />
+            <span>{dbSuccessMessage}</span>
+          </div>
+          <button onClick={() => setDbSuccessMessage(null)} className="text-emerald-600 hover:text-emerald-900">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Conflict Banner if detected */}
       {conflicts.length > 0 && (
         <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 flex items-center justify-between text-xs animate-in fade-in">
@@ -111,11 +159,25 @@ export const AdminTimetable: React.FC = () => {
 
         <div className="flex items-center gap-2 self-end md:self-auto">
           <button
-            onClick={() => alert('Timetable template duplicated from Week 35.')}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5 transition"
+            onClick={() => {
+              loadWeeklyTimetableFromDB(selectedClassId);
+              const cls = classSections.find((c) => c.id === selectedClassId);
+              setDbSuccessMessage(`Weekly timetable for ${cls?.name || 'selected section'} successfully loaded from Database!`);
+              setTimeout(() => setDbSuccessMessage(null), 4000);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5 transition cursor-pointer"
+            title="Populate full weekly schedule from university database"
           >
-            <Copy size={13} />
-            <span>Copy from Previous Week</span>
+            <Database size={13} className="text-teal-600" />
+            <span>Load Week from DB</span>
+          </button>
+          <button
+            onClick={() => setIsSyncModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-xs font-bold text-amber-800 border border-amber-200 flex items-center gap-1.5 transition cursor-pointer"
+            title="Sync weekly timetable from Google Sheets"
+          >
+            <Calendar size={13} className="text-amber-600" />
+            <span>Sync Google Sheet</span>
           </button>
           <button
             onClick={() => {
@@ -181,21 +243,19 @@ export const AdminTimetable: React.FC = () => {
 
                           <div className="pt-2 border-t border-white/20 flex items-center justify-between text-[10px] text-slate-200">
                             <div className="flex items-center gap-1 truncate max-w-[90px]">
-                              <img
-                                src={fac?.photoUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150'}
-                                alt=""
-                                className="w-4 h-4 rounded-full border border-white/40"
-                              />
+                              <div className="w-4 h-4 rounded-full bg-white/20 text-white flex items-center justify-center text-[8px] font-black shrink-0">
+                                {fac?.name ? fac.name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.)\s+/i, '').charAt(0) : 'S'}
+                              </div>
                               <span className="truncate">{fac?.name.split(' ')[1] || 'Staff'}</span>
                             </div>
-                            <span className="font-mono bg-black/40 px-1.5 py-0.5 rounded text-white text-[9px]">
+                            <span className="font-mono bg-white/20 px-1.5 py-0.5 rounded text-white text-[9px]">
                               {slot.room}
                             </span>
                           </div>
 
                           <button
                             onClick={() => deleteTimetableSlot(slot.id)}
-                            className="absolute top-1.5 right-1.5 p-1 text-white/70 hover:text-rose-300 bg-black/40 rounded opacity-0 group-hover:opacity-100 transition"
+                            className="absolute top-1.5 right-1.5 p-1 text-white/80 hover:text-rose-200 bg-white/20 hover:bg-white/30 rounded opacity-0 group-hover:opacity-100 transition"
                             title="Remove Slot"
                           >
                             <X size={12} />
@@ -221,7 +281,7 @@ export const AdminTimetable: React.FC = () => {
 
       {/* Add Slot Modal in White */}
       {isModalOpen && activeSlotTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 backdrop-blur-xs p-4">
           <div className="w-full max-w-md bg-white p-6 border border-slate-200 shadow-2xl rounded-3xl text-slate-900">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
               <div>
@@ -315,6 +375,17 @@ export const AdminTimetable: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Timetable Google Sheet Sync Modal */}
+      <AdminTimetableSyncModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        onSuccess={() => {
+          syncWithBackend();
+          setDbSuccessMessage('Timetable synchronized successfully from Google Sheet!');
+          setTimeout(() => setDbSuccessMessage(null), 4000);
+        }}
+      />
     </div>
   );
 };
