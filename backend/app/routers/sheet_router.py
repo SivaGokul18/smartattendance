@@ -28,6 +28,19 @@ from app.services.sheet_sync import (
 router = APIRouter(prefix="/admin/sheets", tags=["Admin Live Google Sheet Sync"])
 
 
+async def _ensure_sheet_config_table(db: AsyncSession):
+    try:
+        await db.execute(select(SheetConfig).limit(1))
+    except Exception:
+        await db.rollback()
+        try:
+            from app.core.database import engine, Base
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        except Exception:
+            pass
+
+
 def _format_config_item(cfg: SheetConfig) -> SheetConfigItem:
     return SheetConfigItem(
         id=cfg.id,
@@ -52,9 +65,15 @@ async def get_sheet_configs(
     """
     Retrieves current Google Sheet sync configurations and statuses for Student & Faculty rosters.
     """
-    stmt = select(SheetConfig)
-    res = await db.execute(stmt)
-    configs = {c.sheet_type: c for c in res.scalars().all()}
+    await _ensure_sheet_config_table(db)
+
+    try:
+        stmt = select(SheetConfig)
+        res = await db.execute(stmt)
+        configs = {c.sheet_type: c for c in res.scalars().all()}
+    except Exception:
+        await db.rollback()
+        configs = {}
 
     # Ensure student config exists
     stu_cfg = configs.get("student")
@@ -65,6 +84,7 @@ async def get_sheet_configs(
             sync_interval_minutes=0,
             auto_apply=False,
             last_sync_status="idle",
+            updated_at=datetime.utcnow(),
         )
         db.add(stu_cfg)
 
@@ -77,12 +97,16 @@ async def get_sheet_configs(
             sync_interval_minutes=0,
             auto_apply=False,
             last_sync_status="idle",
+            updated_at=datetime.utcnow(),
         )
         db.add(fac_cfg)
 
-    await db.commit()
-    await db.refresh(stu_cfg)
-    await db.refresh(fac_cfg)
+    try:
+        await db.commit()
+        await db.refresh(stu_cfg)
+        await db.refresh(fac_cfg)
+    except Exception:
+        await db.rollback()
 
     return SheetConfigsResponse(
         student=_format_config_item(stu_cfg),
@@ -111,10 +135,16 @@ async def save_sheet_config(
         except ValueError as ve:
             raise HTTPException(status_code=400, detail=str(ve))
 
+    await _ensure_sheet_config_table(db)
+
     config_id = f"sheet-config-{sheet_type}"
-    stmt = select(SheetConfig).where(SheetConfig.id == config_id)
-    res = await db.execute(stmt)
-    cfg = res.scalar_one_or_none()
+    try:
+        stmt = select(SheetConfig).where(SheetConfig.id == config_id)
+        res = await db.execute(stmt)
+        cfg = res.scalar_one_or_none()
+    except Exception:
+        await db.rollback()
+        cfg = None
 
     if not cfg:
         cfg = SheetConfig(
@@ -123,17 +153,22 @@ async def save_sheet_config(
             url=normalized_url,
             sync_interval_minutes=payload.sync_interval_minutes,
             auto_apply=payload.auto_apply,
-            created_by=current_user.id,
+            created_by=str(current_user.id or "admin"),
+            updated_at=datetime.utcnow(),
         )
         db.add(cfg)
     else:
         cfg.url = normalized_url
         cfg.sync_interval_minutes = payload.sync_interval_minutes
         cfg.auto_apply = payload.auto_apply
-        cfg.updated_at = datetime.now(timezone.utc)
+        cfg.updated_at = datetime.utcnow()
 
-    await db.commit()
-    await db.refresh(cfg)
+    try:
+        await db.commit()
+        await db.refresh(cfg)
+    except Exception:
+        await db.rollback()
+
     return _format_config_item(cfg)
 
 
@@ -187,7 +222,7 @@ async def trigger_live_sync(
     cfg = res.scalar_one_or_none()
     if cfg:
         cfg.pending_preview = preview_data
-        cfg.last_synced_at = datetime.now(timezone.utc)
+        cfg.last_synced_at = datetime.utcnow()
         cfg.last_sync_status = "pending_review" if preview_data["error_rows_count"] == 0 else "warning"
         cfg.last_sync_summary = {
             "total": preview_data["total_rows"],

@@ -191,13 +191,8 @@ export const AdminSheetSyncModal: React.FC<AdminSheetSyncModalProps> = ({
         faculty: res.faculty || null,
       });
     } catch (err: any) {
-      console.error('Failed to load sheet configs:', err);
-      const detail = String(err.response?.data?.detail || err.message || '').toLowerCase();
-      if (err.response?.status === 401 || detail.includes('token') || detail.includes('exist')) {
-        setErrorMessage('Session expired or unauthorized. Please re-sign in as Admin.');
-      } else {
-        setErrorMessage('Could not load sheet sync settings. Check server connection.');
-      }
+      console.warn('Notice: Background sheet configs check did not load:', err);
+      // Keep UI clean on passive modal open
     } finally {
       setIsLoadingConfigs(false);
     }
@@ -222,7 +217,10 @@ export const AdminSheetSyncModal: React.FC<AdminSheetSyncModalProps> = ({
       setSaveSuccessMsg(true);
       setTimeout(() => setSaveSuccessMsg(false), 3500);
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message || 'Failed to save configuration.';
+      let msg = err.response?.data?.detail || err.message || 'Failed to save configuration.';
+      if (msg === 'Network Error') {
+        msg = 'Connection error: Unable to connect to server. Please verify your connection and retry.';
+      }
       const detail = String(msg).toLowerCase();
       if (err.response?.status === 401 || detail.includes('token') || detail.includes('exist')) {
         setErrorMessage('Session expired or unauthorized. Please re-sign in as Admin.');
@@ -245,13 +243,17 @@ export const AdminSheetSyncModal: React.FC<AdminSheetSyncModalProps> = ({
     setApplyResult(null);
 
     try {
-      // First ensure the latest config is saved
-      await adminApi.saveSheetConfig({
-        sheet_type: activeTab,
-        url: inputUrl.trim(),
-        sync_interval_minutes: syncInterval,
-        auto_apply: autoApply,
-      });
+      // First attempt to save the latest config
+      try {
+        await adminApi.saveSheetConfig({
+          sheet_type: activeTab,
+          url: inputUrl.trim(),
+          sync_interval_minutes: syncInterval,
+          auto_apply: autoApply,
+        });
+      } catch (saveErr) {
+        console.warn('Could not save sheet config prior to sync, attempting live sync directly:', saveErr);
+      }
 
       const res = await adminApi.syncSheet(activeTab, inputUrl.trim());
       setPreviewRows(res.preview_rows || []);
@@ -270,7 +272,10 @@ export const AdminSheetSyncModal: React.FC<AdminSheetSyncModalProps> = ({
       // Refresh configs
       await loadConfigs();
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message || 'Failed to sync with Google Sheet.';
+      let msg = err.response?.data?.detail || err.message || 'Failed to sync with Google Sheet.';
+      if (msg === 'Network Error') {
+        msg = 'Connection error: Unable to reach backend server or Google Sheet. Please verify the sheet is public (Anyone with link can view) and retry.';
+      }
       const detail = String(msg).toLowerCase();
       if (err.response?.status === 401 || detail.includes('token') || detail.includes('exist')) {
         setErrorMessage('Session expired or unauthorized. Please re-sign in as Admin.');

@@ -389,7 +389,11 @@ async def fetch_sheet_csv(url: str, max_bytes: int = MAX_SHEET_BYTES) -> str:
                     raise ValueError(f"SSRF violation: Redirected to unauthorized host '{redirect_host}'.")
 
                 if response.status_code == 404:
-                    raise ValueError("Google Sheet not found. Please verify the URL.")
+                    raise ValueError(
+                        "Google Sheet not accessible (HTTP 404). Google returns 404 when a sheet is private or restricted. "
+                        "Please open your Google Sheet, click 'Share' (top right) → General access → change to 'Anyone with the link can view' (Viewer), "
+                        "or click 'File' → 'Share' → 'Publish to web' → select 'CSV', and copy that URL."
+                    )
                 if response.status_code in (401, 403):
                     raise ValueError(
                         "Access denied to Google Sheet. Ensure the sheet is shared with "

@@ -23,7 +23,7 @@ class SheetConfig(Base):
     created_by = Column(String(64), nullable=True)
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
         nullable=False
     )
