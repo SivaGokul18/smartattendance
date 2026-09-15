@@ -428,12 +428,12 @@ export const PortalLogin: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  setIdentifier('admin@campus.edu');
+                  setIdentifier('admin');
                   setPassword('admin123');
                   setErrors({});
                 }}
                 className={`py-2 px-2.5 rounded-xl text-left border transition cursor-pointer ${
-                  identifier === 'admin@campus.edu'
+                  identifier === 'admin' || identifier === 'admin@campus.edu'
                     ? 'bg-purple-50 border-purple-400 text-purple-950 shadow-xs'
                     : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                 }`}
@@ -442,7 +442,7 @@ export const PortalLogin: React.FC = () => {
                   <span className="text-[11px] font-extrabold text-purple-900 truncate">Administrator</span>
                   <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800">Admin</span>
                 </div>
-                <span className="text-[10px] text-slate-500 font-mono block truncate">admin@campus.edu</span>
+                <span className="text-[10px] text-slate-500 font-mono block truncate">admin / admin123</span>
               </button>
 
               <button

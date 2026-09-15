@@ -20,7 +20,8 @@ def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 
-def create_access_token(subject: Union[str, Any], role: str, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(subject: Union[str, Any], role: Any, expires_delta: Optional[timedelta] = None) -> str:
+    role_str = role.value if hasattr(role, "value") else str(role)
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
@@ -28,7 +29,7 @@ def create_access_token(subject: Union[str, Any], role: str, expires_delta: Opti
     
     to_encode = {
         "sub": str(subject),
-        "role": role,
+        "role": str(role_str),
         "exp": expire,
         "iat": datetime.now(timezone.utc)
     }
