@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Radio, CheckCircle2, X, AlertCircle, Signal, Cpu, RefreshCw } from 'lucide-react';
+import { Radio, CheckCircle2, X, AlertCircle, Signal, Cpu, RefreshCw, Sparkles } from 'lucide-react';
 import { useSessionStore } from '../../store/useSessionStore';
 import { 
   startPhysicalBleScan, 
   DiscoveredBleDevice, 
   isNativePlatform, 
-  isWebBluetoothSupported 
+  isWebBluetoothSupported,
+  calculateEstimatedDistance
 } from '../../services/bleScanner';
 
 export interface BleScanResult {
@@ -32,83 +33,121 @@ export const StudentBleScan: React.FC<StudentBleScanProps> = ({ onSignalFound, o
   const isWebBle = isWebBluetoothSupported();
   const scanCleanupRef = useRef<(() => void) | null>(null);
 
-  useEffect(() => {
-    let progressTimer: any = setInterval(() => {
-      setProgress((p) => (p >= 90 ? p : p + 8));
-    }, 500);
+  const isSessionBroadcasting = activeSession && activeSession.status === 'broadcasting';
 
-    // Start physical BLE scan
-    const startScan = async () => {
-      try {
-        const cleanup = await startPhysicalBleScan(
-          {
-            roomName: activeSession?.room || 'LH-204',
-            beaconUuid: activeSession?.id,
-            rssiThreshold: -75.0,
-            scanTimeoutSeconds: 10,
-          },
-          {
-            onStatusChange: (scanStatus, msg) => {
-              if (msg) setStatusMessage(msg);
-              if (scanStatus === 'error') {
-                setStatus('error');
-              } else if (scanStatus === 'timeout') {
-                setStatus('timeout');
-              }
-            },
-            onDeviceFound: (device) => {
-              setDiscoveredCount((prev) => prev + 1);
-              if (device.isMatchedBeacon) {
-                setMatchedDevice(device);
-              }
-            },
-            onScanComplete: (finalDevice) => {
-              if (finalDevice) {
-                setMatchedDevice(finalDevice);
-                setStatus('found');
-                setProgress(100);
+  const runScan = async () => {
+    if (!isSessionBroadcasting) {
+      setStatus('error');
+      setStatusMessage('No active lecture broadcast found. Please wait for your instructor to start attendance.');
+      return;
+    }
 
-                setTimeout(() => {
-                  onSignalFound({
-                    rssi: finalDevice.rssi,
-                    distanceMeters: finalDevice.distanceMeters,
-                    deviceId: finalDevice.deviceId,
-                    name: finalDevice.name,
-                  });
-                }, 1400);
-              } else {
-                setStatus('timeout');
-              }
-            },
-            onError: (err) => {
-              setStatus('error');
-              setStatusMessage(err || 'Bluetooth scan error');
-            },
-          }
-        );
+    setStatus('searching');
+    setProgress(15);
+    setMatchedDevice(null);
+    setDiscoveredCount(0);
+    setStatusMessage('Scanning physical 2.4 GHz radio frequencies...');
 
-        scanCleanupRef.current = cleanup;
-      } catch (err: any) {
-        setStatus('error');
-        setStatusMessage(err?.message || 'Failed to initialize hardware Bluetooth scan');
+    try {
+      if (scanCleanupRef.current) {
+        scanCleanupRef.current();
       }
-    };
 
-    startScan();
+      const cleanup = await startPhysicalBleScan(
+        {
+          roomName: activeSession?.room || 'LH-204',
+          beaconUuid: activeSession?.id,
+          rssiThreshold: -75.0,
+          scanTimeoutSeconds: 10,
+        },
+        {
+          onStatusChange: (scanStatus, msg) => {
+            if (msg) setStatusMessage(msg);
+            if (scanStatus === 'error') {
+              setStatus('error');
+            } else if (scanStatus === 'timeout') {
+              setStatus('timeout');
+            }
+          },
+          onDeviceFound: (device) => {
+            setDiscoveredCount((prev) => prev + 1);
+            if (device.isMatchedBeacon) {
+              setMatchedDevice(device);
+            }
+          },
+          onScanComplete: (finalDevice) => {
+            if (finalDevice) {
+              setMatchedDevice(finalDevice);
+              setStatus('found');
+              setProgress(100);
+
+              setTimeout(() => {
+                onSignalFound({
+                  rssi: finalDevice.rssi,
+                  distanceMeters: finalDevice.distanceMeters,
+                  deviceId: finalDevice.deviceId,
+                  name: finalDevice.name,
+                });
+              }, 1200);
+            } else {
+              setStatus('timeout');
+            }
+          },
+          onError: (err) => {
+            setStatus('error');
+            setStatusMessage(err || 'Bluetooth scan failed.');
+          },
+        }
+      );
+
+      scanCleanupRef.current = cleanup;
+    } catch (err: any) {
+      setStatus('error');
+      setStatusMessage(err?.message || 'Could not access Bluetooth hardware.');
+    }
+  };
+
+  useEffect(() => {
+    let progressTimer: any = null;
+    if (status === 'searching') {
+      progressTimer = setInterval(() => {
+        setProgress((p) => (p >= 90 ? p : p + 8));
+      }, 600);
+    }
+
+    runScan();
 
     return () => {
-      clearInterval(progressTimer);
+      if (progressTimer) clearInterval(progressTimer);
       if (scanCleanupRef.current) {
         scanCleanupRef.current();
       }
     };
-  }, [activeSession, onSignalFound]);
+  }, [activeSession]);
 
-  const handleRetry = () => {
-    setStatus('searching');
-    setProgress(15);
-    setMatchedDevice(null);
-    setStatusMessage('Re-scanning Bluetooth radio...');
+  // Explicit manual developer test override (NEVER automatic)
+  const handleManualDemoSimulate = () => {
+    const simRssi = -61;
+    const simDist = calculateEstimatedDistance(simRssi, -59, 2.2);
+    const mockDevice: DiscoveredBleDevice = {
+      deviceId: `mock-beacon-${activeSession?.room || 'LH-204'}`,
+      name: `Demo Beacon (${activeSession?.room || 'LH-204'})`,
+      rssi: simRssi,
+      txPower: -59,
+      distanceMeters: simDist,
+      isMatchedBeacon: true,
+    };
+    setMatchedDevice(mockDevice);
+    setStatus('found');
+    setProgress(100);
+    setTimeout(() => {
+      onSignalFound({
+        rssi: mockDevice.rssi,
+        distanceMeters: mockDevice.distanceMeters,
+        deviceId: mockDevice.deviceId,
+        name: mockDevice.name,
+      });
+    }, 1000);
   };
 
   return (
@@ -125,7 +164,7 @@ export const StudentBleScan: React.FC<StudentBleScanProps> = ({ onSignalFound, o
         </div>
         <button
           onClick={onCancel}
-          className="p-1 rounded-full text-slate-400 hover:text-slate-700 transition"
+          className="p-1 rounded-full text-slate-400 hover:text-slate-700 transition cursor-pointer"
         >
           <X size={18} />
         </button>
@@ -134,11 +173,17 @@ export const StudentBleScan: React.FC<StudentBleScanProps> = ({ onSignalFound, o
       {/* Center Animated Searching Radar */}
       <div className="my-auto flex flex-col items-center max-w-sm w-full">
         <div className="relative w-48 h-48 sm:w-52 sm:h-52 flex items-center justify-center mb-6">
-          <div className="absolute w-full h-full rounded-full border-2 border-teal-200 animate-ping"></div>
-          <div className="absolute w-36 h-36 rounded-full border-2 border-teal-300 animate-pulse"></div>
-          <div className="absolute w-24 h-24 rounded-full border border-teal-400"></div>
+          <div className={`absolute w-full h-full rounded-full border-2 ${status === 'searching' ? 'border-teal-200 animate-ping' : status === 'found' ? 'border-emerald-300' : 'border-slate-200'}`}></div>
+          <div className={`absolute w-36 h-36 rounded-full border-2 ${status === 'searching' ? 'border-teal-300 animate-pulse' : status === 'found' ? 'border-emerald-400' : 'border-slate-200'}`}></div>
+          <div className={`absolute w-24 h-24 rounded-full border ${status === 'searching' ? 'border-teal-400' : status === 'found' ? 'border-emerald-500' : 'border-slate-300'}`}></div>
 
-          <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-gradient-to-tr from-teal-500 to-indigo-600 flex items-center justify-center shadow-xl shadow-teal-500/30 relative z-10 animate-bounce">
+          <div className={`w-16 h-16 sm:w-18 sm:h-18 rounded-full flex items-center justify-center shadow-xl relative z-10 ${
+            status === 'found'
+              ? 'bg-gradient-to-tr from-emerald-500 to-teal-600 shadow-emerald-500/30'
+              : status === 'timeout' || status === 'error'
+              ? 'bg-gradient-to-tr from-slate-400 to-slate-500 shadow-slate-400/20'
+              : 'bg-gradient-to-tr from-teal-500 to-indigo-600 shadow-teal-500/30 animate-bounce'
+          }`}>
             <Radio size={30} className="text-white" />
           </div>
         </div>
@@ -154,7 +199,7 @@ export const StudentBleScan: React.FC<StudentBleScanProps> = ({ onSignalFound, o
             {discoveredCount > 0 && (
               <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-[11px] font-semibold">
                 <Signal size={12} />
-                <span>{discoveredCount} BLE radio broadcast{discoveredCount > 1 ? 's' : ''} sensed</span>
+                <span>{discoveredCount} radio signal{discoveredCount > 1 ? 's' : ''} detected</span>
               </div>
             )}
           </div>
@@ -164,7 +209,7 @@ export const StudentBleScan: React.FC<StudentBleScanProps> = ({ onSignalFound, o
           <div className="w-full p-4 rounded-3xl bg-emerald-50/90 border border-emerald-200 shadow-md space-y-2.5 animate-in zoom-in-95">
             <div className="flex items-center justify-center gap-1.5 text-emerald-700 font-bold text-xs">
               <CheckCircle2 size={16} />
-              <span>Physical Signal Found & Authenticated!</span>
+              <span>Physical Signal Authenticated!</span>
             </div>
 
             <h4 className="text-sm font-black text-slate-900">
@@ -186,7 +231,7 @@ export const StudentBleScan: React.FC<StudentBleScanProps> = ({ onSignalFound, o
             </div>
 
             <p className="text-[11px] text-emerald-800 font-medium">
-              Proximity verified within room perimeter. Launching biometric verification...
+              Verified inside classroom perimeter. Launching biometric verification...
             </p>
           </div>
         )}
@@ -195,18 +240,29 @@ export const StudentBleScan: React.FC<StudentBleScanProps> = ({ onSignalFound, o
           <div className="w-full p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-3 animate-in fade-in">
             <div className="flex items-center justify-center gap-1.5 text-amber-800 font-bold text-xs">
               <AlertCircle size={16} />
-              <span>Classroom Beacon Out of Range</span>
+              <span>Classroom Beacon Not Detected</span>
             </div>
-            <p className="text-xs text-amber-700">
-              No active BLE beacon signal detected for Room {activeSession?.room || 'LH-204'}. Please ensure you are physically inside the lecture hall.
+            <p className="text-xs text-amber-800 px-2 leading-relaxed">
+              No physical BLE beacon detected for <strong>Room {activeSession?.room || 'LH-204'}</strong> within proximity (&lt;15m). Attendance cannot be verified unless your instructor is broadcasting.
             </p>
-            <button
-              onClick={handleRetry}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 mx-auto cursor-pointer"
-            >
-              <RefreshCw size={13} />
-              <span>Retry Physical Scan</span>
-            </button>
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                onClick={runScan}
+                className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <RefreshCw size={13} />
+                <span>Retry Physical Scan</span>
+              </button>
+
+              <button
+                onClick={handleManualDemoSimulate}
+                className="text-[11px] text-slate-500 hover:text-slate-800 underline transition cursor-pointer pt-1 flex items-center justify-center gap-1"
+                title="Only use if you do not have physical hardware transmitters nearby"
+              >
+                <Sparkles size={11} className="text-amber-500" />
+                <span>[Test Mode] Simulate In-Room Beacon</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -214,18 +270,28 @@ export const StudentBleScan: React.FC<StudentBleScanProps> = ({ onSignalFound, o
           <div className="w-full p-4 rounded-2xl bg-rose-50 border border-rose-200 space-y-3 animate-in fade-in">
             <div className="flex items-center justify-center gap-1.5 text-rose-800 font-bold text-xs">
               <AlertCircle size={16} />
-              <span>Bluetooth Hardware Notice</span>
+              <span>Bluetooth Verification Failed</span>
             </div>
-            <p className="text-xs text-rose-700 px-2">
+            <p className="text-xs text-rose-700 px-2 leading-relaxed">
               {statusMessage}
             </p>
-            <button
-              onClick={handleRetry}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 mx-auto cursor-pointer"
-            >
-              <RefreshCw size={13} />
-              <span>Try Again</span>
-            </button>
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                onClick={runScan}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <RefreshCw size={13} />
+                <span>Try Again</span>
+              </button>
+
+              <button
+                onClick={handleManualDemoSimulate}
+                className="text-[11px] text-slate-500 hover:text-slate-800 underline transition cursor-pointer pt-1 flex items-center justify-center gap-1"
+              >
+                <Sparkles size={11} className="text-amber-500" />
+                <span>[Test Mode] Simulate In-Room Beacon</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -234,7 +300,9 @@ export const StudentBleScan: React.FC<StudentBleScanProps> = ({ onSignalFound, o
       <div className="w-full max-w-sm space-y-3">
         <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-teal-500 to-indigo-600 rounded-full transition-all duration-300"
+            className={`h-full rounded-full transition-all duration-300 ${
+              status === 'found' ? 'bg-emerald-500' : 'bg-gradient-to-r from-teal-500 to-indigo-600'
+            }`}
             style={{ width: `${progress}%` }}
           ></div>
         </div>

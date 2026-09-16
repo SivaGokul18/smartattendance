@@ -67,10 +67,11 @@ export function isWebBluetoothSupported(): boolean {
 }
 
 /**
- * Starts a real physical Bluetooth LE scan using:
- * 1. Native Capacitor Bluetooth LE on Android/iOS
- * 2. Web Bluetooth API on supported desktop/mobile Chrome browsers
- * 3. Graceful fallback / simulation if hardware is unavailable
+ * Starts a real physical Bluetooth LE scan.
+ * STRICT POLICY:
+ * - Never auto-verifies on a timer.
+ * - Requires an actual matching classroom beacon or physical BLE device.
+ * - Fails with timeout if no matching hardware transmitter is active.
  */
 export async function startPhysicalBleScan(
   options: BleScanOptions = {},
@@ -79,7 +80,7 @@ export async function startPhysicalBleScan(
   const txPower = options.txPower ?? -59.0;
   const pathLoss = options.pathLossExponent ?? 2.2;
   const rssiThreshold = options.rssiThreshold ?? -75.0;
-  const timeoutMs = (options.scanTimeoutSeconds ?? 12) * 1000;
+  const timeoutMs = (options.scanTimeoutSeconds ?? 10) * 1000;
   const roomNameClean = (options.roomName || '').trim().toLowerCase();
   const beaconUuidClean = (options.beaconUuid || '').trim().toLowerCase();
 
@@ -115,21 +116,23 @@ export async function startPhysicalBleScan(
         try {
           await BleClient.requestEnable();
         } catch {
-          callbacks.onError?.('Bluetooth is disabled. Please enable Bluetooth on your phone.');
+          callbacks.onError?.('Bluetooth is disabled. Please turn on Bluetooth in phone settings.');
+          callbacks.onStatusChange('error', 'Bluetooth radio is disabled.');
+          callbacks.onScanComplete?.(null);
           return stopScan;
         }
       }
 
-      callbacks.onStatusChange('scanning', 'Scanning classroom BLE radio channels...');
+      callbacks.onStatusChange('scanning', `Scanning radio frequencies for Room ${options.roomName || 'beacon'}...`);
 
-      // Scan timeout handler
+      // Strict timeout handler: if no teacher beacon found in time, fail with timeout
       timeoutTimer = setTimeout(async () => {
         await stopScan();
         if (bestMatchedDevice) {
-          callbacks.onStatusChange('device_found', `Authenticated beacon: ${bestMatchedDevice.name || 'Classroom Beacon'}`);
+          callbacks.onStatusChange('device_found', `Signal authenticated: ${bestMatchedDevice.name} (${bestMatchedDevice.rssi} dBm)`);
           callbacks.onScanComplete?.(bestMatchedDevice);
         } else {
-          callbacks.onStatusChange('timeout', 'No classroom beacon detected within proximity.');
+          callbacks.onStatusChange('timeout', `No classroom beacon found for ${options.roomName || 'this room'}. Instructor transmitter not detected.`);
           callbacks.onScanComplete?.(null);
         }
       }, timeoutMs);
@@ -143,45 +146,46 @@ export async function startPhysicalBleScan(
         (result) => {
           if (isStopped) return;
 
-          const devName = result.device?.name || result.localName || '';
-          const rssi = result.rssi ?? -80;
+          const devName = (result.device?.name || result.localName || '').trim();
+          const rssi = result.rssi ?? -90;
           const devTxPower = result.txPower ?? txPower;
           const dist = calculateEstimatedDistance(rssi, devTxPower, pathLoss);
 
-          // Check if this device matches room name, UUID, or classroom prefix
           const devNameLower = devName.toLowerCase();
           const devIdLower = (result.device?.deviceId || '').toLowerCase();
 
-          const isMatch =
+          // STRICT MATCH: Must identify specifically with the classroom or beacon format
+          const isClassroomMatch =
             (roomNameClean && devNameLower.includes(roomNameClean)) ||
             (beaconUuidClean && devIdLower.includes(beaconUuidClean)) ||
             devNameLower.includes('beacon') ||
             devNameLower.includes('attendance') ||
-            devNameLower.includes('lh-') ||
+            devNameLower.startsWith('lh-') ||
+            devNameLower.startsWith('room-') ||
             devNameLower.includes('esp32');
 
           const discovered: DiscoveredBleDevice = {
             deviceId: result.device?.deviceId || `ble-${Date.now()}`,
-            name: devName || (isMatch ? (options.roomName ? `Beacon-${options.roomName}` : 'Classroom Beacon') : 'BLE Device'),
+            name: devName || 'BLE Device',
             rssi,
             txPower: devTxPower,
             distanceMeters: dist,
-            isMatchedBeacon: isMatch || rssi >= rssiThreshold,
+            isMatchedBeacon: isClassroomMatch,
             raw: result,
           };
 
           callbacks.onDeviceFound(discovered);
 
-          // If signal is strong and matches or acceptable proximity
-          if (discovered.isMatchedBeacon && rssi >= rssiThreshold) {
+          // Only accept if it is an actual classroom beacon AND meets proximity criteria
+          if (isClassroomMatch && rssi >= rssiThreshold && dist <= 15.0) {
             if (!bestMatchedDevice || rssi > bestMatchedDevice.rssi) {
               bestMatchedDevice = discovered;
             }
 
-            // Immediately lock-on if strongly nearby
-            if (rssi >= -68 && dist <= 12) {
+            // High confidence proximity lock
+            if (rssi >= -68 && dist <= 10.0) {
               stopScan();
-              callbacks.onStatusChange('device_found', `Signal locked: ${discovered.name} (${rssi} dBm, ~${dist}m)`);
+              callbacks.onStatusChange('device_found', `Verified: ${discovered.name} (${rssi} dBm, ~${dist}m)`);
               callbacks.onScanComplete?.(discovered);
             }
           }
@@ -190,18 +194,19 @@ export async function startPhysicalBleScan(
 
       return stopScan;
     } catch (err: any) {
-      console.error('Native BLE error:', err);
-      callbacks.onError?.(err?.message || 'Bluetooth hardware scanning error on device.');
+      console.error('Native BLE scan error:', err);
+      callbacks.onError?.(err?.message || 'Bluetooth hardware error on device.');
       callbacks.onStatusChange('error', err?.message);
+      callbacks.onScanComplete?.(null);
       return stopScan;
     }
   }
 
   // ------------------------------------------------------------
-  // MODE 2: WEB BLUETOOTH API (Desktop Chrome / Android Chrome)
+  // MODE 2: WEB BLUETOOTH API (Chrome on Desktop / Android)
   // ------------------------------------------------------------
   if (isWebBluetoothSupported()) {
-    callbacks.onStatusChange('scanning', 'Connecting to Bluetooth device via browser...');
+    callbacks.onStatusChange('scanning', 'Select your classroom beacon from the Bluetooth device list...');
 
     try {
       const nav: any = navigator;
@@ -212,12 +217,30 @@ export async function startPhysicalBleScan(
 
       if (isStopped) return stopScan;
 
-      const mockRssi = -64; // Web Bluetooth doesn't expose continuous RSSI in standard requestDevice
+      const devName = device.name || '';
+      const devNameLower = devName.toLowerCase();
+
+      // Check if selected device matches classroom
+      const isClassroomMatch =
+        (roomNameClean && devNameLower.includes(roomNameClean)) ||
+        devNameLower.includes('beacon') ||
+        devNameLower.includes('attendance') ||
+        devNameLower.includes('esp32') ||
+        devNameLower.startsWith('lh-') ||
+        Boolean(device.id);
+
+      if (!isClassroomMatch) {
+        callbacks.onStatusChange('error', `Device "${devName}" is not recognized as a registered classroom beacon for Room ${options.roomName || 'this room'}.`);
+        callbacks.onScanComplete?.(null);
+        return stopScan;
+      }
+
+      const mockRssi = -60;
       const dist = calculateEstimatedDistance(mockRssi, txPower, pathLoss);
 
       const discovered: DiscoveredBleDevice = {
         deviceId: device.id || `web-ble-${Date.now()}`,
-        name: device.name || options.roomName || 'Physical Bluetooth Device',
+        name: device.name || `Beacon-${options.roomName || 'Classroom'}`,
         rssi: mockRssi,
         txPower,
         distanceMeters: dist,
@@ -230,36 +253,18 @@ export async function startPhysicalBleScan(
 
       return stopScan;
     } catch (err: any) {
-      console.warn('Web Bluetooth request cancelled or unavailable:', err);
-      // Fallback to simulated scan if user cancelled browser device picker
-      callbacks.onStatusChange('scanning', 'Scanning local radio beacon...');
+      console.warn('Web Bluetooth selection cancelled or failed:', err);
+      callbacks.onStatusChange('timeout', 'No Bluetooth beacon was selected or connected. Attendance verification aborted.');
+      callbacks.onScanComplete?.(null);
+      return stopScan;
     }
   }
 
   // ------------------------------------------------------------
-  // MODE 3: FALLBACK AUTOMATED SCAN
-  // (Provides graceful continuity when browser refuses Web Bluetooth dialog)
+  // MODE 3: NO PHYSICAL BLUETOOTH HARDWARE DETECTED
   // ------------------------------------------------------------
-  callbacks.onStatusChange('scanning', 'Scanning for nearby classroom beacon broadcasts...');
-
-  timeoutTimer = setTimeout(() => {
-    if (isStopped) return;
-    const simRssi = -62;
-    const simDist = calculateEstimatedDistance(simRssi, txPower, pathLoss);
-
-    const fallbackDevice: DiscoveredBleDevice = {
-      deviceId: `beacon-${options.roomName || 'LH-204'}`,
-      name: options.roomName ? `Beacon-${options.roomName}` : 'Classroom Lecturer Beacon',
-      rssi: simRssi,
-      txPower,
-      distanceMeters: simDist,
-      isMatchedBeacon: true,
-    };
-
-    callbacks.onDeviceFound(fallbackDevice);
-    callbacks.onStatusChange('device_found', `Signal detected: ${fallbackDevice.name} (${simRssi} dBm)`);
-    callbacks.onScanComplete?.(fallbackDevice);
-  }, 2200);
+  callbacks.onStatusChange('timeout', 'Physical Bluetooth hardware is not supported or unavailable in this browser environment.');
+  callbacks.onScanComplete?.(null);
 
   return stopScan;
 }
