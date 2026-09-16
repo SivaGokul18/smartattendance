@@ -14,7 +14,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { StudentEnrollment } from './StudentEnrollment';
 import { StudentHome } from './StudentHome';
-import { StudentBleScan } from './StudentBleScan';
+import { StudentBleScan, BleScanResult } from './StudentBleScan';
 import { StudentFaceVerify } from './StudentFaceVerify';
 import { StudentConfirmation } from './StudentConfirmation';
 import { StudentHistory } from './StudentHistory';
@@ -45,6 +45,8 @@ export const StudentMobileApp: React.FC = () => {
     'normal' | 'enrollment' | 'ble_scan' | 'face_verify' | 'confirmation'
   >('normal');
 
+  const [detectedBleData, setDetectedBleData] = useState<BleScanResult | null>(null);
+
   const isBleLive = activeSession && activeSession.status === 'broadcasting';
 
   const handleLogout = () => {
@@ -53,10 +55,14 @@ export const StudentMobileApp: React.FC = () => {
 
   // Flow handlers
   const handleStartAttendanceFlow = () => {
+    setDetectedBleData(null);
     setFlowState('ble_scan');
   };
 
-  const handleSignalFound = () => {
+  const handleSignalFound = (data?: BleScanResult) => {
+    if (data) {
+      setDetectedBleData(data);
+    }
     setFlowState('face_verify');
   };
 
@@ -262,6 +268,7 @@ export const StudentMobileApp: React.FC = () => {
             <StudentFaceVerify
               onVerified={handleVerified}
               onCancel={() => setFlowState('normal')}
+              bleData={detectedBleData}
             />
           ) : flowState === 'confirmation' ? (
             <StudentConfirmation onDone={handleConfirmationDone} />

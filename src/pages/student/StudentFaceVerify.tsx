@@ -7,11 +7,17 @@ import { simulateFaceScan, FaceScanStatus } from '../../lib/face-simulator';
 interface StudentFaceVerifyProps {
   onVerified: () => void;
   onCancel: () => void;
+  bleData?: {
+    rssi: number;
+    distanceMeters: number;
+    deviceId: string;
+  } | null;
 }
 
 export const StudentFaceVerify: React.FC<StudentFaceVerifyProps> = ({
   onVerified,
   onCancel,
+  bleData,
 }) => {
   const { selectedStudent } = useAppStore();
   const { studentCheckIn } = useSessionStore();
@@ -31,6 +37,9 @@ export const StudentFaceVerify: React.FC<StudentFaceVerifyProps> = ({
           rollNumber: selectedStudent.rollNumber,
           department: selectedStudent.department,
           method: 'ble+face',
+          rssi: bleData?.rssi,
+          distanceMeters: bleData?.distanceMeters,
+          bleToken: bleData?.deviceId,
         });
 
         setTimeout(() => {
@@ -40,7 +49,7 @@ export const StudentFaceVerify: React.FC<StudentFaceVerifyProps> = ({
     }, true);
 
     return cleanup;
-  }, [selectedStudent, studentCheckIn, onVerified]);
+  }, [selectedStudent, studentCheckIn, onVerified, bleData]);
 
   const isSuccess = scanStatus === 'verified';
   const isFailed = scanStatus === 'failed';

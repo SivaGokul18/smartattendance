@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ScanFace, CheckCircle2, RotateCcw, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
+import { studentApi } from '../../api/client';
 
 interface StudentEnrollmentProps {
   onComplete: () => void;
@@ -32,6 +33,7 @@ export const StudentEnrollment: React.FC<StudentEnrollmentProps> = ({ onComplete
 
   const handleConfirm = () => {
     updateStudent(selectedStudent.id, { faceIdStatus: 'enrolled' });
+    studentApi.enrollFace(`face-tpl-${selectedStudent.rollNumber || selectedStudent.id}`).catch(console.warn);
     onComplete();
   };
 

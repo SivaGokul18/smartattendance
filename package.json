@@ -17,6 +17,7 @@
     "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
+    "@capacitor-community/bluetooth-le": "^8.3.0",
     "@capacitor/android": "^8.5.1",
     "@capacitor/cli": "^8.5.1",
     "@capacitor/core": "^8.5.1",

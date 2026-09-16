@@ -499,13 +499,37 @@ async def get_faculty_approvals(
     
     active_faculty = target_faculty or faculty
 
+    # Collect all faculty record IDs that belong to this mentor (supports personal SSO vs campus email)
+    mentor_faculty_ids = set()
+    if active_faculty:
+        mentor_faculty_ids.add(active_faculty.id)
+    if faculty:
+        mentor_faculty_ids.add(faculty.id)
+
+    clean_user_name = current_user.name.replace("Dr.", "").replace("Prof.", "").replace("Mr.", "").replace("Mrs.", "").replace("Ms.", "").strip().lower()
+    if clean_user_name:
+        matching_facs = (await db.execute(
+            select(Faculty.id)
+            .join(User, Faculty.user_id == User.id)
+            .where(
+                or_(
+                    User.email == current_user.email,
+                    User.name.ilike(f"%{clean_user_name}%"),
+                    Faculty.employee_id == (active_faculty.employee_id if active_faculty else "")
+                )
+            )
+        )).scalars().all()
+        for fid in matching_facs:
+            mentor_faculty_ids.add(fid)
+
     query = select(LeaveRequest, Student, User).join(Student, LeaveRequest.student_id == Student.id).join(User, Student.user_id == User.id)
-    if active_faculty and current_user.role == RoleEnum.FACULTY:
+    if mentor_faculty_ids and current_user.role == RoleEnum.FACULTY:
+        dept = active_faculty.department if active_faculty else current_user.department
         query = query.where(
             or_(
-                LeaveRequest.mentor_id == active_faculty.id,
-                Student.mentor_id == active_faculty.id,
-                and_(LeaveRequest.mentor_id == None, Student.department == active_faculty.department)
+                LeaveRequest.mentor_id.in_(list(mentor_faculty_ids)),
+                Student.mentor_id.in_(list(mentor_faculty_ids)),
+                and_(LeaveRequest.mentor_id == None, Student.department == dept)
             )
         )
     

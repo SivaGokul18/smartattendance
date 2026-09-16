@@ -314,16 +314,21 @@ export const useAppStore = create<AppState>((set, get) => ({
               };
             }
           }
-          // Ensure selectedStudent has a valid mentor
+          // Ensure selectedStudent has their proper assigned mentor
           if (state.selectedStudent && facs.length > 0) {
-            const currentMentor = facs.find(f => f.id === state.selectedStudent.mentorId) ||
-              facs.find(f => f.name === state.selectedStudent.mentorName) ||
-              facs[0];
-            if (currentMentor && (!state.selectedStudent.mentorId || !state.selectedStudent.mentorName)) {
+            const studentMentorId = state.currentUser?.mentorId || state.selectedStudent.mentorId;
+            const studentMentorName = state.currentUser?.mentorName || state.selectedStudent.mentorName;
+
+            const currentMentor = (studentMentorId && facs.find(f => f.id === studentMentorId || f.employeeId === studentMentorId)) ||
+              (studentMentorName && facs.find(f => f.name.toLowerCase().includes(studentMentorName.toLowerCase()) || studentMentorName.toLowerCase().includes(f.name.toLowerCase()))) ||
+              facs.find(f => f.isMentor && f.department.toLowerCase() === (state.selectedStudent.department || '').toLowerCase()) ||
+              facs.find(f => f.isMentor);
+
+            if (currentMentor) {
               nextState.selectedStudent = {
                 ...state.selectedStudent,
-                mentorId: state.selectedStudent.mentorId || currentMentor.id,
-                mentorName: state.selectedStudent.mentorName || currentMentor.name,
+                mentorId: studentMentorId || currentMentor.id,
+                mentorName: studentMentorName || currentMentor.name,
               };
             }
           }

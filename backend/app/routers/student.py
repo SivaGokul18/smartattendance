@@ -357,31 +357,37 @@ async def create_student_leave(
     if req.mentorId:
         mentor = await db.get(Faculty, req.mentorId)
         if not mentor:
-            # Check if mentorId was an employeeId or user_id
             mentor = (await db.execute(select(Faculty).where(
                 or_(Faculty.employee_id == req.mentorId, Faculty.user_id == req.mentorId)
             ))).scalar_one_or_none()
 
-    # 2. Check student's registered mentor_id
+    # 2. Check student's registered mentor_id in the database
     if not mentor and student.mentor_id:
         mentor = await db.get(Faculty, student.mentor_id)
 
-    # 3. Check by mentorName if supplied
+    # 3. Check by mentorName if supplied (fuzzy match cleaning honorifics)
     if not mentor and req.mentorName:
+        clean_name = req.mentorName.replace("Dr.", "").replace("Prof.", "").replace("Mr.", "").replace("Mrs.", "").replace("Ms.", "").strip()
         mentor = (await db.execute(
             select(Faculty).join(User, Faculty.user_id == User.id)
-            .where(User.name.ilike(f"%{req.mentorName.strip()}%"))
+            .where(or_(User.name.ilike(f"%{clean_name}%"), User.email.ilike(f"%{clean_name}%")))
         )).scalars().first()
 
-    # 4. Fallback to any faculty in the same department
+    # 4. Fallback to faculty marked as is_mentor in the same department
     if not mentor and student.department:
         mentor = (await db.execute(
-            select(Faculty).where(Faculty.department == student.department)
+            select(Faculty).where(and_(Faculty.department == student.department, Faculty.is_mentor == True))
         )).scalars().first()
+        if not mentor:
+            mentor = (await db.execute(
+                select(Faculty).where(Faculty.department == student.department)
+            )).scalars().first()
 
-    # 5. Fallback to any active faculty
+    # 5. Fallback to any active mentor
     if not mentor:
-        mentor = (await db.execute(select(Faculty))).scalars().first()
+        mentor = (await db.execute(select(Faculty).where(Faculty.is_mentor == True))).scalars().first()
+        if not mentor:
+            mentor = (await db.execute(select(Faculty))).scalars().first()
 
     if mentor:
         mentor_user = await db.get(User, mentor.user_id)

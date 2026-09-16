@@ -39,6 +39,7 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({ onReEnrollFace, 
   const studentRoll = currentUser?.rollNumber || selectedStudent.rollNumber;
   const studentDept = currentUser?.department || selectedStudent.department;
   const studentYear = currentUser?.year || selectedStudent.year;
+  const studentSection = currentUser?.section || selectedStudent.section || 'A';
   const studentPhone = currentUser?.phone || selectedStudent.phone || 'Not Provided';
   const studentMentor = currentUser?.mentorName || selectedStudent.mentorName || 'Unassigned';
   const attendanceRate = currentUser?.attendanceRate ?? selectedStudent.attendanceRate ?? 100;
@@ -94,7 +95,9 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({ onReEnrollFace, 
         <div className="mt-3 space-y-0.5">
           <h3 className="font-extrabold text-lg text-slate-900 flex items-center justify-center gap-1.5">
             <span>{studentName}</span>
-            <ShieldCheck size={16} className="text-teal-600 inline" title="Verified Institutional Student" />
+            <span title="Verified Institutional Student">
+              <ShieldCheck size={16} className="text-teal-600 inline" />
+            </span>
           </h3>
           <span className="inline-block px-2.5 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-700 font-mono font-bold text-xs">
             {studentRoll}
@@ -125,6 +128,14 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({ onReEnrollFace, 
             <div>
               <span className="text-[10px] text-slate-400 block font-semibold uppercase">Full Name</span>
               <span className="font-bold text-slate-800">{studentName}</span>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2.5 p-2 rounded-xl bg-slate-50 border border-slate-100">
+            <ShieldCheck size={15} className="text-teal-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="text-[10px] text-slate-400 block font-semibold uppercase">Roll No / Student ID</span>
+              <span className="font-mono font-bold text-slate-800">{studentRoll || 'Not Provided'}</span>
             </div>
           </div>
 

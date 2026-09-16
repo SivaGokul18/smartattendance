@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useSessionStore } from '../../store/useSessionStore';
+import { studentApi } from '../../api/client';
 
 interface StudentHomeProps {
   onMarkAttendance: () => void;
@@ -24,10 +25,29 @@ interface StudentHomeProps {
 
 export const StudentHome: React.FC<StudentHomeProps> = ({ onMarkAttendance }) => {
   const { currentUser, selectedStudent, timetable, classSections, subjects, faculty, syncWithBackend } = useAppStore();
-  const { activeSession } = useSessionStore();
+  const { activeSession, setActiveSession } = useSessionStore();
 
   useEffect(() => {
     syncWithBackend();
+
+    const fetchLiveSession = async () => {
+      try {
+        const homeData = await studentApi.getHome();
+        if (homeData?.activeSessionInRange) {
+          setActiveSession(homeData.activeSessionInRange);
+        } else if (activeSession && !homeData?.activeSessionInRange) {
+          // If previous session ended on backend
+          setActiveSession(null);
+        }
+      } catch (err) {
+        // Silent fallback to local store if offline
+      }
+    };
+
+    fetchLiveSession();
+    const interval = setInterval(fetchLiveSession, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const [selectedSectionId, setSelectedSectionId] = useState<string>('');

@@ -179,6 +179,7 @@ export const AdminBookings: React.FC = () => {
                 ))
               )}
             </tbody>
+          </table>
         </div>
       )}
 

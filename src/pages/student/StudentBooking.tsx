@@ -55,7 +55,8 @@ export const StudentBooking: React.FC = () => {
     deleteTimetableSlot,
     loadWeeklyTimetableFromDB,
     classSections,
-    syncWithBackend
+    syncWithBackend,
+    currentUser
   } = useAppStore();
 
   useEffect(() => {
@@ -245,31 +246,60 @@ export const StudentBooking: React.FC = () => {
     return isNaN(diffDays) ? 1 : diffDays;
   };
 
-  // Automatically fetch student's assigned mentor from DB (assigned via Admin Portal)
-  const currentStudent = students.find((s) => s.id === selectedStudent.id) || selectedStudent;
+  // Automatically fetch student's assigned mentor from DB or currentUser
+  const currentStudent = useMemo(() => {
+    if (currentUser) {
+      const byEmail = students.find((s) => currentUser.email && s.email.toLowerCase() === currentUser.email.toLowerCase());
+      if (byEmail) return byEmail;
+      const byRoll = students.find((s) => currentUser.rollNumber && s.rollNumber === currentUser.rollNumber);
+      if (byRoll) return byRoll;
+    }
+    return students.find((s) => s.id === selectedStudent.id) || selectedStudent;
+  }, [students, currentUser, selectedStudent]);
+
+  const studentMentorId = currentUser?.mentorId || currentStudent?.mentorId;
+  const studentMentorName = currentUser?.mentorName || currentStudent?.mentorName;
 
   const fallbackMentor = useMemo(() => {
     return {
-      id: currentStudent?.mentorId || faculty[0]?.id || '',
-      name: currentStudent?.mentorName || faculty[0]?.name || (faculty.length > 0 ? 'Faculty Mentor' : 'Unassigned Mentor'),
+      id: studentMentorId || faculty[0]?.id || '',
+      name: studentMentorName || faculty[0]?.name || (faculty.length > 0 ? 'Faculty Mentor' : 'Unassigned Mentor'),
       employeeId: faculty[0]?.employeeId || 'N/A',
       department: currentStudent?.department || faculty[0]?.department || '',
       email: faculty[0]?.email || '',
     };
-  }, [currentStudent, faculty]);
+  }, [currentStudent, studentMentorId, studentMentorName, faculty]);
 
   const assignedMentor = useMemo(() => {
+    // 1. If student manually selected a mentor from the dropdown
     if (selectedMentorId) {
       const found = faculty.find((f) => f.id === selectedMentorId);
       if (found) return found;
     }
-    return (
-      faculty.find((f) => f.id === currentStudent?.mentorId) ||
-      faculty.find((f) => f.name === currentStudent?.mentorName) ||
-      faculty[0] ||
-      fallbackMentor
-    );
-  }, [selectedMentorId, faculty, currentStudent, fallbackMentor]);
+    // 2. Match student's official mentor by ID
+    if (studentMentorId) {
+      const found = faculty.find((f) => f.id === studentMentorId || f.employeeId === studentMentorId);
+      if (found) return found;
+    }
+    // 3. Match student's official mentor by name
+    if (studentMentorName) {
+      const cleanTarget = studentMentorName.toLowerCase().replace(/^(dr\.|prof\.|mr\.|ms\.|mrs\.)\s+/i, '').trim();
+      const found = faculty.find((f) => {
+        const cleanF = f.name.toLowerCase().replace(/^(dr\.|prof\.|mr\.|ms\.|mrs\.)\s+/i, '').trim();
+        return cleanF.includes(cleanTarget) || cleanTarget.includes(cleanF);
+      });
+      if (found) return found;
+    }
+    // 4. Match any faculty marked isMentor in the same department
+    const dept = currentUser?.department || currentStudent?.department;
+    if (dept) {
+      const found = faculty.find((f) => f.isMentor && f.department.toLowerCase() === dept.toLowerCase());
+      if (found) return found;
+    }
+    // 5. Fallback
+    const firstMentor = faculty.find((f) => f.isMentor);
+    return firstMentor || faculty[0] || fallbackMentor;
+  }, [selectedMentorId, faculty, studentMentorId, studentMentorName, currentUser, currentStudent, fallbackMentor]);
 
   const handleOpenConfirmation = (slot: BookingSlot) => {
     setConfirmingSlot(slot);
@@ -296,11 +326,16 @@ export const StudentBooking: React.FC = () => {
 
     const duration = calculateLeaveDuration(leaveStartDate, startSession, leaveEndDate, endSession);
 
+    const studentIdToUse = currentStudent?.id || selectedStudent.id;
+    const studentNameToUse = currentUser?.name || currentStudent?.name || selectedStudent.name;
+    const rollNumberToUse = currentUser?.rollNumber || currentStudent?.rollNumber || selectedStudent.rollNumber;
+    const departmentToUse = currentUser?.department || currentStudent?.department || selectedStudent.department;
+
     addLeaveRequest({
-      studentId: selectedStudent.id,
-      studentName: selectedStudent.name,
-      rollNumber: selectedStudent.rollNumber,
-      department: selectedStudent.department,
+      studentId: studentIdToUse,
+      studentName: studentNameToUse,
+      rollNumber: rollNumberToUse,
+      department: departmentToUse,
       mentorId: assignedMentor.id,
       mentorName: assignedMentor.name,
       leaveType,
@@ -1246,21 +1281,21 @@ export const StudentBooking: React.FC = () => {
               <div className="p-3 rounded-xl bg-slate-50 border border-[#E5E7EB] flex items-center justify-between">
                 <div>
                   <span className="text-[10px] text-[#6B7280] font-medium block">Applying Student:</span>
-                  <span className="text-xs font-bold text-[#1A1D29]">{selectedStudent.name}</span>
+                  <span className="text-xs font-bold text-[#1A1D29]">{currentUser?.name || currentStudent?.name || selectedStudent.name}</span>
                 </div>
                 <span className="font-mono text-xs text-[#6B7280] bg-white px-2 py-0.5 rounded border border-[#E5E7EB]">
-                  {selectedStudent.rollNumber} • {selectedStudent.department}
+                  {currentUser?.rollNumber || currentStudent?.rollNumber || selectedStudent.rollNumber} • {currentUser?.department || currentStudent?.department || selectedStudent.department}
                 </span>
               </div>
 
               {/* 1. Mentor Selection & Card */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="font-semibold text-[#1A1D29] block">
+                  <label className="font-semibold text-[#1A1D29] block text-xs">
                     Designated Faculty Mentor *
                   </label>
-                  <span className="text-[10px] font-semibold bg-white text-indigo-700 px-2.5 py-0.5 rounded-full border border-indigo-200 shadow-2xs">
-                    Direct Mentor Route
+                  <span className="text-[10px] font-semibold bg-teal-50 text-teal-700 px-2.5 py-0.5 rounded-full border border-teal-200 shadow-2xs">
+                    {assignedMentor.id === studentMentorId || (studentMentorName && assignedMentor.name.toLowerCase().includes(studentMentorName.toLowerCase())) ? 'Official Assigned Mentor' : 'Mentor Route'}
                   </span>
                 </div>
 
@@ -1268,13 +1303,17 @@ export const StudentBooking: React.FC = () => {
                   <select
                     value={assignedMentor.id}
                     onChange={(e) => setSelectedMentorId(e.target.value)}
-                    className="w-full text-xs font-medium bg-slate-50 border border-[#E5E7EB] rounded-xl px-3 py-2 text-[#1A1D29] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+                    className="w-full text-xs font-semibold bg-white border border-[#E5E7EB] rounded-xl px-3 py-2.5 text-[#1A1D29] focus:outline-none focus:ring-2 focus:ring-indigo-500 transition cursor-pointer"
                   >
-                    {faculty.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name} — {f.department} ({f.employeeId || 'Faculty'})
-                      </option>
-                    ))}
+                    {faculty.map((f) => {
+                      const isAssigned = f.id === studentMentorId || 
+                        (studentMentorName && f.name.toLowerCase().includes(studentMentorName.toLowerCase()));
+                      return (
+                        <option key={f.id} value={f.id}>
+                          {f.name} — {f.department} ({f.employeeId || 'Faculty'}){isAssigned ? ' ★ (Your Assigned Mentor)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 )}
 

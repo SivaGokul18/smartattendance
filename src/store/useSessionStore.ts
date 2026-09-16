@@ -37,6 +37,9 @@ interface SessionState {
     department: string;
     method?: 'ble+face' | 'manual_override';
     overrideReason?: string;
+    rssi?: number;
+    distanceMeters?: number;
+    bleToken?: string;
   }) => boolean;
   endSession: () => void;
   manualMarkPresent: (student: {
@@ -46,12 +49,17 @@ interface SessionState {
     department: string;
     reason: string;
   }) => void;
+  setActiveSession: (session: BleSession | null) => void;
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   activeSession: null,
   attendanceRecords: [],
   historySessions: [],
+
+  setActiveSession: (session) => {
+    set({ activeSession: session });
+  },
 
   startSession: (params) => {
     const localId = `sess-${Date.now()}`;
@@ -131,6 +139,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // Submit attendance check-in to backend
     studentApi.verifyAttendance({
       sessionId: activeSession.id,
+      rssi: student.rssi,
+      distanceMeters: student.distanceMeters,
+      bleToken: student.bleToken,
       faceConfidenceScore: 95.0,
       faceVerified: true,
       method: student.method || 'ble+face',
