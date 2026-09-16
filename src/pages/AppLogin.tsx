@@ -16,6 +16,7 @@ import { useAppStore } from '../store/useAppStore';
 import { authApi } from '../api/client';
 import { ForcePasswordChangeModal } from '../components/auth/ForcePasswordChangeModal';
 import { getRosterAccount } from '../lib/rosterAccounts';
+import { ServerConnectionModal } from '../components/common/ServerConnectionModal';
 
 interface FormErrors {
   identifier?: string;
@@ -279,6 +280,7 @@ export const AppLogin: React.FC = () => {
           <p className="text-[11px] xl:text-xs text-slate-500 mt-0.5 pb-2.5 border-b border-slate-100">
             Log in to verify class attendance & check academic streak
           </p>
+          <ServerConnectionModal />
         </div>
         {/* Login Form */}
         <form onSubmit={handleSubmit} noValidate className="space-y-3">

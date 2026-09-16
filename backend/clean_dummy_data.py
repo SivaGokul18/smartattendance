@@ -1,61 +1,64 @@
 import asyncio
-import pymysql
-from sqlalchemy import select, text
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from sqlalchemy import select, delete
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine, Base
 from app.core.security import get_password_hash
-from app.models.user import User, RoleEnum
+from app.models.user import User, Student, Faculty, RoleEnum
+from app.models.academic import Department, Course, ClassSection, Room, TimetableSlot, SectionSubjectFaculty
+from app.models.attendance import AttendanceSession, AttendanceRecord
+from app.models.leave import LeaveRequest, FacultyLeaveRequest
+from app.models.audit import AuditLog
 from app.models.settings import AdminSettings
 
 
-def clean_mysql_database():
+async def clean_database():
     """
     Removes all mock/dummy student, faculty, course, room, session, and leave data
-    from the MySQL database while preserving administrative users and settings.
+    from the target database (PostgreSQL / SQLite) while preserving administrative users and settings.
     """
-    print(f"Connecting to MySQL '{settings.MYSQL_DATABASE}' on {settings.MYSQL_HOST}:{settings.MYSQL_PORT}...")
-    conn = pymysql.connect(
-        host=settings.MYSQL_HOST,
-        port=settings.MYSQL_PORT,
-        user=settings.MYSQL_USER,
-        password=settings.MYSQL_PASSWORD,
-        database=settings.MYSQL_DATABASE,
-    )
-    cursor = conn.cursor()
+    print(f"Connecting to database: {settings.DATABASE_URL.split('@')[-1] if '@' in settings.DATABASE_URL else 'Local'}")
 
-    # Disable foreign key checks for clean truncation/deletion
-    cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
+    async with AsyncSessionLocal() as db:
+        models_to_clear = [
+            ("attendance_records", AttendanceRecord),
+            ("attendance_sessions", AttendanceSession),
+            ("faculty_leave_requests", FacultyLeaveRequest),
+            ("leave_requests", LeaveRequest),
+            ("section_subject_faculty", SectionSubjectFaculty),
+            ("timetable_slots", TimetableSlot),
+            ("class_sections", ClassSection),
+            ("courses", Course),
+            ("rooms", Room),
+            ("students", Student),
+            ("faculty", Faculty),
+            ("audit_logs", AuditLog),
+        ]
 
-    tables_to_clear = [
-        "attendance_records",
-        "attendance_sessions",
-        "faculty_leave_requests",
-        "leave_requests",
-        "section_subject_faculty",
-        "timetable_slots",
-        "class_sections",
-        "courses",
-        "rooms",
-        "students",
-        "faculty",
-        "audit_logs",
-    ]
+        for name, model in models_to_clear:
+            try:
+                await db.execute(delete(model))
+                await db.commit()
+                print(f"[CLEARED] Table '{name}' wiped.")
+            except Exception as e:
+                await db.rollback()
+                print(f"[NOTICE] Table '{name}': {e}")
 
-    for tbl in tables_to_clear:
+        # Remove non-admin users
         try:
-            cursor.execute(f"DELETE FROM `{tbl}`;")
-            print(f"[CLEARED] Table '{tbl}' wiped.")
+            stmt = delete(User).where((User.role != RoleEnum.ADMIN) | (User.email != "admin@campus.edu"))
+            await db.execute(stmt)
+            await db.commit()
+            print("[CLEARED] All non-admin user records removed.")
         except Exception as e:
-            print(f"[INFO] Notice on table '{tbl}': {e}")
+            await db.rollback()
+            print(f"[NOTICE] Non-admin cleanup: {e}")
 
-    # Remove non-admin users
-    cursor.execute("DELETE FROM `users` WHERE LOWER(`role`) != 'admin' AND `email` != 'admin@campus.edu';")
-    print("[CLEARED] All non-admin user records removed.")
-
-    cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
-    conn.commit()
-    conn.close()
-    print("[OK] Foreign key constraints restored and transactions committed.")
+    print("[OK] Database cleaning finished.")
 
 
 async def verify_admin_and_settings():
@@ -101,10 +104,10 @@ async def verify_admin_and_settings():
 
 
 async def main():
-    clean_mysql_database()
+    await clean_database()
     from seed import seed_database
     await seed_database()
-    print("\n[SUCCESS] MySQL cleaned and institutional/demo accounts verified!")
+    print("\n[SUCCESS] Target database cleaned and institutional/demo accounts verified!")
 
 
 if __name__ == "__main__":

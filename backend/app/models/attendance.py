@@ -6,11 +6,6 @@ from app.core.database import Base
 
 class AttendanceSession(Base):
     __tablename__ = "attendance_sessions"
-    __table_args__ = {
-        'mysql_engine': 'InnoDB',
-        'mysql_charset': 'utf8mb4',
-        'mysql_collate': 'utf8mb4_unicode_ci'
-    }
 
     id = Column(String(64), primary_key=True, index=True)
     section_id = Column(String(64), ForeignKey("class_sections.id", ondelete="CASCADE"), nullable=False)
@@ -18,8 +13,8 @@ class AttendanceSession(Base):
     faculty_id = Column(String(64), ForeignKey("faculty.id", ondelete="CASCADE"), nullable=False)
     room_id = Column(String(64), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False)
     
-    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    expires_at = Column(DateTime, nullable=False)
+    started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
     status = Column(String(32), default="broadcasting", nullable=False, index=True)  # idle | broadcasting | ended
     broadcast_power = Column(Float, default=-59.0, nullable=False)
     rolling_token = Column(String(128), nullable=False)
@@ -34,17 +29,12 @@ class AttendanceSession(Base):
 
 class AttendanceRecord(Base):
     __tablename__ = "attendance_records"
-    __table_args__ = {
-        'mysql_engine': 'InnoDB',
-        'mysql_charset': 'utf8mb4',
-        'mysql_collate': 'utf8mb4_unicode_ci'
-    }
 
     id = Column(String(64), primary_key=True, index=True)
     session_id = Column(String(64), ForeignKey("attendance_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     student_id = Column(String(64), ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
     
-    marked_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    marked_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     confidence_score = Column(Float, default=94.5, nullable=False)
     method = Column(String(32), default="ble+face", nullable=False)  # "ble+face" | "manual_override"
     face_verified = Column(Boolean, default=True, nullable=False)

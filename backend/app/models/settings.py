@@ -4,11 +4,6 @@ from app.core.database import Base
 
 class AdminSettings(Base):
     __tablename__ = "admin_settings"
-    __table_args__ = {
-        'mysql_engine': 'InnoDB',
-        'mysql_charset': 'utf8mb4',
-        'mysql_collate': 'utf8mb4_unicode_ci'
-    }
 
     id = Column(String(64), primary_key=True, default="institution-settings-default")
     ble_signal_range = Column(Float, default=15.0, nullable=False)

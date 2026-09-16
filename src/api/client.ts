@@ -1,13 +1,39 @@
 import axios, { AxiosInstance } from 'axios';
 
-// Extract API Base URL from environment (e.g. Render backend URL in production)
-const rawApiUrl = (import.meta.env.VITE_API_URL || 'https://smart-attendance-backend-f7vl.onrender.com').trim().replace(/\/+$/, '');
-export const API_BASE_URL = rawApiUrl.endsWith('/api/v1') ? rawApiUrl : `${rawApiUrl}/api/v1`;
+// Dynamic API Base URL resolution supporting local network, cloud Render, and manual override
+export const getActiveBackendBase = (): string => {
+  // 1. Check user override in localStorage (set via Server Switcher)
+  const custom = localStorage.getItem('custom_api_url');
+  if (custom && custom.trim()) {
+    return custom.trim().replace(/\/+$/, '').replace(/\/api\/v1$/, '');
+  }
+
+  // 2. If accessing via local network IP (e.g. http://10.40.43.137:5173 from a phone)
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    const host = window.location.hostname;
+    const isLanIp = /^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host);
+    const envUrl = (import.meta.env.VITE_API_URL || '').trim();
+    if (isLanIp && (!envUrl || envUrl.includes('localhost') || envUrl.includes(':8000') || envUrl.includes('127.0.0.1'))) {
+      return `http://${host}:8000`;
+    }
+  }
+
+  // 3. Fallback to configured environment variable or cloud Render backend
+  const envUrl = (import.meta.env.VITE_API_URL || 'https://smart-attendance-backend-f7vl.onrender.com').trim();
+  return envUrl.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
+};
+
+export const getApiBaseUrl = (): string => {
+  const base = getActiveBackendBase();
+  return `${base}/api/v1`;
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 // Helper to construct WebSocket URL for Render or local
 export const getWebSocketUrl = (path: string = '') => {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  const base = rawApiUrl.replace(/\/api\/v1$/, '');
+  const base = getActiveBackendBase();
   if (base) {
     const wsProto = base.startsWith('https') ? 'wss' : 'ws';
     const host = base.replace(/^https?:\/\//, '');
@@ -26,9 +52,10 @@ export const api: AxiosInstance = axios.create({
   },
 });
 
-// Request Interceptor: Attach JWT Bearer Token if available
+// Dynamic baseURL interceptor + Bearer Token
 api.interceptors.request.use(
   (config) => {
+    config.baseURL = getApiBaseUrl();
     const token = localStorage.getItem('auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

@@ -1,7 +1,12 @@
 import os
 from typing import List
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
+
+# Load environment variables from .env file
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"))
+load_dotenv()
 
 
 class Settings(BaseSettings):
@@ -9,15 +14,9 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
 
-    # MySQL 8.x Configuration
-    MYSQL_HOST: str = os.getenv("MYSQL_HOST", "localhost")
-    MYSQL_PORT: int = int(os.getenv("MYSQL_PORT", "3306"))
-    MYSQL_USER: str = os.getenv("MYSQL_USER", "root")
-    MYSQL_PASSWORD: str = os.getenv("MYSQL_PASSWORD", "SIVAGOKUL@2007")
-    MYSQL_DATABASE: str = os.getenv("MYSQL_DATABASE", "smart_attendance")
-
-    # Optional direct connection string override
-    DATABASE_URL_OVERRIDE: str = os.getenv("DATABASE_URL", "")
+    # Supabase / PostgreSQL Configuration
+    DATABASE_URL_OVERRIDE: str = ""
+    SUPABASE_DB_URL: str = ""
 
     # Secret Key for JWT encryption
     SECRET_KEY: str = os.getenv("SECRET_KEY", "smart-attendance-institutional-production-master-secret-key-2026")
@@ -51,30 +50,33 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        # 1. If explicit DATABASE_URL is provided (e.g. Render PostgreSQL or SQLite)
-        if self.DATABASE_URL_OVERRIDE:
-            url = self.DATABASE_URL_OVERRIDE.strip()
+        # 1. Use explicit DATABASE_URL or SUPABASE_DB_URL
+        raw_url = (os.getenv("DATABASE_URL") or self.DATABASE_URL_OVERRIDE or os.getenv("SUPABASE_DB_URL") or self.SUPABASE_DB_URL or "").strip()
+        if raw_url:
+            url = raw_url
             if url.startswith("postgres://"):
                 url = url.replace("postgres://", "postgresql+asyncpg://", 1)
             elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
                 url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
             elif url.startswith("sqlite://") and not url.startswith("sqlite+aiosqlite://"):
                 url = url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+            
+            # Clean up Supabase / asyncpg query parameters
+            # asyncpg does not accept ?sslmode=require, it expects ssl=require or strips it for connect_args
+            if "sslmode=require" in url:
+                url = url.replace("sslmode=require", "ssl=require")
+            
+            # Strip pgbouncer query param from URL (asyncpg handles pooling via statement_cache_size)
+            if "pgbouncer=true" in url:
+                url = url.replace("?pgbouncer=true&", "?").replace("&pgbouncer=true", "").replace("?pgbouncer=true", "")
+
             return url
 
-        # 2. If configured for an external or custom MySQL server
-        if self.MYSQL_HOST and self.MYSQL_HOST not in ("localhost", "127.0.0.1"):
-            return URL.create(
-                drivername="mysql+aiomysql",
-                username=self.MYSQL_USER,
-                password=self.MYSQL_PASSWORD,
-                host=self.MYSQL_HOST,
-                port=self.MYSQL_PORT,
-                database=self.MYSQL_DATABASE,
-                query={"charset": "utf8mb4"}
-            ).render_as_string(hide_password=False)
+        # 2. Check if SQLite is explicitly requested
+        if os.getenv("USE_SQLITE", "false").lower() in ("true", "1", "yes"):
+            return "sqlite+aiosqlite:///./smart_attendance.db"
 
-        # 3. Default to SQLite async database for effortless local or standalone container execution
+        # 3. Default fallback to local SQLite async database if no Supabase/PostgreSQL URL is set
         return "sqlite+aiosqlite:///./smart_attendance.db"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

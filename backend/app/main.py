@@ -32,16 +32,25 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database initialized successfully.")
 
-    # Automatically initialize demo seed data if database is fresh
+    # Automatically initialize demo seed data and institutional roster if database is fresh
     try:
+        import os
         from app.models.user import User, RoleEnum
-        from sqlalchemy import select
+        from sqlalchemy import select, func
         async with AsyncSessionLocal() as session:
-            admin_user = (await session.execute(select(User).where(User.role == RoleEnum.ADMIN))).scalars().first()
-            if not admin_user:
+            user_count = (await session.execute(select(func.count(User.id)))).scalar() or 0
+            if user_count <= 1:
                 logger.info("Fresh database detected. Auto-seeding initial institutional data...")
                 from seed import seed_database
                 await seed_database()
+
+                # Automatically load institutional roster from Excel if available
+                for r_path in ["institutional_roster.xlsx", "../institutional_roster.xlsx"]:
+                    if os.path.exists(r_path):
+                        logger.info(f"Auto-importing institutional roster from {r_path}...")
+                        from load_excel_roster import load_roster_from_excel
+                        await load_roster_from_excel(r_path)
+                        break
     except Exception as e:
         logger.warning(f"Notice during automatic database seed check: {e}")
 
@@ -68,10 +77,10 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
-# CORS Middleware: Permissive regex allows Render domains, Vercel, localhost, and mobile webviews with credentials
+# CORS Middleware: Permissive regex allows Render domains, Vercel, localhost, Capacitor and mobile webviews with credentials
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^https?:\/\/.*",
+    allow_origin_regex=r"^(https?|capacitor|ionic):\/\/.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

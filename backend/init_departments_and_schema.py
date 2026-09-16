@@ -27,7 +27,10 @@ async def migrate():
         print("[OK] Base metadata tables created/verified.")
 
         # 2. Check and add must_change_password column to users table if missing
-        res = await conn.execute(text("SHOW COLUMNS FROM users LIKE 'must_change_password'"))
+        res = await conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'users' AND column_name = 'must_change_password';"
+        ))
         col = res.fetchone()
         if not col:
             print("[INFO] Adding must_change_password column to users table...")

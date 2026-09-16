@@ -5,11 +5,6 @@ from app.core.database import Base
 
 class Department(Base):
     __tablename__ = "departments"
-    __table_args__ = {
-        'mysql_engine': 'InnoDB',
-        'mysql_charset': 'utf8mb4',
-        'mysql_collate': 'utf8mb4_unicode_ci'
-    }
 
     id = Column(String(64), primary_key=True, index=True)
     code = Column(String(32), unique=True, index=True, nullable=False)   # e.g. "CSE"
@@ -19,11 +14,6 @@ class Department(Base):
 
 class Course(Base):
     __tablename__ = "courses"
-    __table_args__ = {
-        'mysql_engine': 'InnoDB',
-        'mysql_charset': 'utf8mb4',
-        'mysql_collate': 'utf8mb4_unicode_ci'
-    }
 
     id = Column(String(64), primary_key=True, index=True)
     code = Column(String(32), unique=True, index=True, nullable=False)
@@ -36,11 +26,6 @@ class Course(Base):
 
 class Room(Base):
     __tablename__ = "rooms"
-    __table_args__ = {
-        'mysql_engine': 'InnoDB',
-        'mysql_charset': 'utf8mb4',
-        'mysql_collate': 'utf8mb4_unicode_ci'
-    }
 
     id = Column(String(64), primary_key=True, index=True)
     name = Column(String(64), nullable=False)  # e.g. "LH-204"
@@ -53,11 +38,6 @@ class Room(Base):
 
 class ClassSection(Base):
     __tablename__ = "class_sections"
-    __table_args__ = {
-        'mysql_engine': 'InnoDB',
-        'mysql_charset': 'utf8mb4',
-        'mysql_collate': 'utf8mb4_unicode_ci'
-    }
 
     id = Column(String(64), primary_key=True, index=True)
     name = Column(String(128), nullable=False)  # "CSE - 3rd Year - Section A"
@@ -71,11 +51,6 @@ class ClassSection(Base):
 
 class SectionSubjectFaculty(Base):
     __tablename__ = "section_subject_faculty"
-    __table_args__ = {
-        'mysql_engine': 'InnoDB',
-        'mysql_charset': 'utf8mb4',
-        'mysql_collate': 'utf8mb4_unicode_ci'
-    }
 
     id = Column(String(64), primary_key=True, index=True)
     class_section_id = Column(String(64), ForeignKey("class_sections.id", ondelete="CASCADE"), nullable=False)
@@ -85,11 +60,6 @@ class SectionSubjectFaculty(Base):
 
 class TimetableSlot(Base):
     __tablename__ = "timetable_slots"
-    __table_args__ = {
-        'mysql_engine': 'InnoDB',
-        'mysql_charset': 'utf8mb4',
-        'mysql_collate': 'utf8mb4_unicode_ci'
-    }
 
     id = Column(String(64), primary_key=True, index=True)
     section_id = Column(String(64), ForeignKey("class_sections.id", ondelete="CASCADE"), nullable=False)

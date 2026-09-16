@@ -19,21 +19,22 @@ A production-grade Python backend built with **FastAPI**, **SQLAlchemy (Async)**
   - Full workflow for faculty leave applications, timetabled lecture conflict detection, and Admin substitute teacher allocation.
 - **Audit Logging**: Automatic immutable logging of overrides, session terminations, and leave decisions in `audit_logs`.
 - **Flexible & Robust Database**:
-  - Primary production database is **MySQL 8.x** via asynchronous `mysql+aiomysql` driver.
-  - Configured with explicit `InnoDB` engine, `utf8mb4` character set, and `utf8mb4_unicode_ci` collation on all tables.
-  - Connection pooling with `pool_pre_ping=True` and `pool_recycle=3600` to prevent stale MySQL connections.
-  - Native `JSON` columns for system metadata and audit trails.
+  - Primary production database is **Supabase PostgreSQL** via high-performance asynchronous `asyncpg` driver.
+  - Fully compatible with direct connection (IPv6) and Supabase Connection Pooler (IPv4) on ports `5432` and `6543`.
+  - Connection pooling with `pool_pre_ping=True`, `statement_cache_size=0` for Supavisor / PgBouncer, and enforced SSL.
+  - Native `JSONB` columns for system metadata and audit trails.
+  - Automatic table creation and seeding on startup if database is fresh.
 - **Alembic Database Migrations**:
-  - Full schema evolution tracking configured for MySQL async engines under `alembic/`.
+  - Full schema evolution tracking configured for PostgreSQL async engines under `alembic/`.
 - **Optional Redis Pub/Sub**: Seamless multi-node WebSocket sync when `REDIS_URL` is configured.
 
 ---
 
-## 2. Quickstart (MySQL Database Setup)
+## 2. Quickstart (Supabase PostgreSQL Setup)
 
 ### Prerequisites
 - Python 3.10+ (tested with Python 3.14)
-- **MySQL 8.x** running locally on port 3306 (or configured in `.env`)
+- Supabase Project (PostgreSQL)
 - Node.js & npm (for the frontend)
 
 ### Setup & Run
@@ -57,12 +58,23 @@ A production-grade Python backend built with **FastAPI**, **SQLAlchemy (Async)**
    pip install -r requirements.txt
    ```
 
-4. **Seed the database with demo accounts & timetable**:
+4. **Configure Supabase & Verify Connection**:
+   Set `DATABASE_URL` in `backend/.env`, then run:
+   ```bash
+   python check_supabase.py
+   ```
+
+5. **Migrate data from MySQL to Supabase**:
+   ```bash
+   python migrate_mysql_to_supabase.py
+   ```
+
+6. **(Alternative) Seed fresh database with demo accounts & timetable**:
    ```bash
    python seed.py
    ```
 
-5. **Start the FastAPI server**:
+7. **Start the FastAPI server**:
    ```bash
    uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
    ```

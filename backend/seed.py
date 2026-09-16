@@ -1,6 +1,5 @@
 import asyncio
 from datetime import datetime, timezone
-import pymysql
 from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine, Base
@@ -11,39 +10,13 @@ from app.models.academic import Department, Course, ClassSection, Room, Timetabl
 from app.models.sheet_sync import SheetConfig
 
 
-def ensure_mysql_database_exists():
-    """
-    Connects to MySQL server and creates the target database if it does not already exist.
-    """
-    print(f"Verifying MySQL database '{settings.MYSQL_DATABASE}' on {settings.MYSQL_HOST}:{settings.MYSQL_PORT}...")
-    try:
-        conn = pymysql.connect(
-            host=settings.MYSQL_HOST,
-            port=settings.MYSQL_PORT,
-            user=settings.MYSQL_USER,
-            password=settings.MYSQL_PASSWORD,
-        )
-        cursor = conn.cursor()
-        cursor.execute(
-            f"CREATE DATABASE IF NOT EXISTS `{settings.MYSQL_DATABASE}` "
-            "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-        )
-        conn.commit()
-        conn.close()
-        print(f"[OK] MySQL Database '{settings.MYSQL_DATABASE}' confirmed ready.")
-    except Exception as e:
-        print(f"Notice during database verification: {e}")
-
-
 async def seed_database():
-    if "mysql" in settings.DATABASE_URL:
-        ensure_mysql_database_exists()
-    print("Beginning Smart Attendance Schema & Demo Accounts Initialization...")
+    print(f"Beginning Smart Attendance Schema & Initialization on {settings.DATABASE_URL.split('://')[0]}...")
 
-    # Create all MySQL tables with InnoDB and utf8mb4
+    # Create all database tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("[OK] All MySQL tables verified / created.")
+    print("[OK] All database tables verified / created.")
 
     async with AsyncSessionLocal() as db:
         # 1. Super Admin User
@@ -170,7 +143,7 @@ async def seed_database():
         ]
         fac_map = {}
         for u_id, f_id, f_name, f_email, f_emp, f_dept, f_grp in faculty_roster:
-            existing_u = (await db.execute(select(User).where(User.email == f_email))).scalar_one_or_none()
+            existing_u = (await db.execute(select(User).where((User.email == f_email) | (User.id == u_id)))).scalar_one_or_none()
             if not existing_u:
                 new_u = User(
                     id=u_id,
@@ -207,7 +180,7 @@ async def seed_database():
             ("usr-stu-3", "stu-demo-3", "Kavya Iyer", "kavya@campus.edu", "2026CS103", "Information Technology", 3, "A", 89.0),
         ]
         for u_id, s_id, s_name, s_email, s_roll, s_dept, s_yr, s_sec, s_rate in student_roster:
-            existing_stu_u = (await db.execute(select(User).where(User.email == s_email))).scalar_one_or_none()
+            existing_stu_u = (await db.execute(select(User).where((User.email == s_email) | (User.id == u_id)))).scalar_one_or_none()
             if not existing_stu_u:
                 new_su = User(
                     id=u_id,

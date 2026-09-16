@@ -22,6 +22,7 @@ import { authApi } from '../api/client';
 import { ForcePasswordChangeModal } from '../components/auth/ForcePasswordChangeModal';
 import { RosterAccountsModal } from '../components/auth/RosterAccountsModal';
 import { getRosterAccount, RosterAccount } from '../lib/rosterAccounts';
+import { ServerConnectionModal } from '../components/common/ServerConnectionModal';
 
 export const PortalLogin: React.FC = () => {
   const navigate = useNavigate();
@@ -406,6 +407,7 @@ export const PortalLogin: React.FC = () => {
             <p className="text-xs sm:text-sm text-slate-500 mt-1 leading-normal">
               Enter your credentials to access the admin portal.
             </p>
+            <ServerConnectionModal />
           </div>
 
           {/* Quick Credential Banner */}

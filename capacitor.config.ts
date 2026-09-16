@@ -6,11 +6,16 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
+    cleartext: true,
     allowNavigation: [
       'smart-attendance-backend-f7vl.onrender.com',
       'accounts.google.com',
       '*.google.com',
-      '*.googleapis.com'
+      '*.googleapis.com',
+      '10.*',
+      '192.168.*',
+      '172.*',
+      '*'
     ]
   }
 };

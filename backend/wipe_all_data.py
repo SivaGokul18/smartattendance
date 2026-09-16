@@ -1,72 +1,77 @@
 import asyncio
 import os
-import sqlite3
-import pymysql
-from sqlalchemy import select
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from sqlalchemy import select, delete
 from app.core.config import settings
-from app.core.database import AsyncSessionLocal
+from app.core.database import AsyncSessionLocal, engine, Base
 from app.core.security import get_password_hash
-from app.models.user import User, RoleEnum
+from app.models.user import User, Student, Faculty, RoleEnum
+from app.models.academic import Department, Course, ClassSection, Room, TimetableSlot, SectionSubjectFaculty
+from app.models.attendance import AttendanceSession, AttendanceRecord
+from app.models.leave import LeaveRequest, FacultyLeaveRequest
+from app.models.audit import AuditLog
 from app.models.settings import AdminSettings
+from app.models.sheet_sync import SheetConfig
 
 
-def wipe_mysql_database():
+async def wipe_database_data():
     """
     Wipes all student, faculty, course, room, class section, timetable,
-    session, attendance, leave, audit, and sync data from the MySQL database.
+    session, attendance, leave, audit, and sync data using SQLAlchemy ORM.
     Retains only the admin user and default settings.
+    Fully compatible with Supabase PostgreSQL and SQLite.
     """
-    print(f"[1/3] Connecting to MySQL '{settings.MYSQL_DATABASE}' on {settings.MYSQL_HOST}:{settings.MYSQL_PORT}...")
-    conn = pymysql.connect(
-        host=settings.MYSQL_HOST,
-        port=settings.MYSQL_PORT,
-        user=settings.MYSQL_USER,
-        password=settings.MYSQL_PASSWORD,
-        database=settings.MYSQL_DATABASE,
-    )
-    cursor = conn.cursor()
+    print(f"[1/2] Connecting to database: {settings.DATABASE_URL.split('@')[-1] if '@' in settings.DATABASE_URL else 'Local'}")
 
-    # Disable foreign key checks for clean truncation
-    cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
+    async with AsyncSessionLocal() as db:
+        # Delete records in reverse dependency order
+        models_to_clear = [
+            ("attendance_records", AttendanceRecord),
+            ("attendance_sessions", AttendanceSession),
+            ("faculty_leave_requests", FacultyLeaveRequest),
+            ("leave_requests", LeaveRequest),
+            ("section_subject_faculty", SectionSubjectFaculty),
+            ("timetable_slots", TimetableSlot),
+            ("class_sections", ClassSection),
+            ("courses", Course),
+            ("rooms", Room),
+            ("students", Student),
+            ("faculty", Faculty),
+            ("audit_logs", AuditLog),
+            ("sheet_configs", SheetConfig),
+            ("departments", Department),
+        ]
 
-    tables_to_wipe = [
-        "attendance_records",
-        "attendance_sessions",
-        "faculty_leave_requests",
-        "leave_requests",
-        "section_subject_faculty",
-        "timetable_slots",
-        "class_sections",
-        "courses",
-        "rooms",
-        "students",
-        "faculty",
-        "audit_logs",
-        "sheet_configs",
-    ]
+        for name, model in models_to_clear:
+            try:
+                await db.execute(delete(model))
+                await db.commit()
+                print(f"  - [CLEARED] Table '{name}' completely wiped.")
+            except Exception as e:
+                await db.rollback()
+                print(f"  - [NOTICE] Table '{name}': {e}")
 
-    for tbl in tables_to_wipe:
+        # Remove non-admin users
         try:
-            cursor.execute(f"DELETE FROM `{tbl}`;")
-            print(f"  - [CLEARED] Table '{tbl}' completely wiped.")
+            stmt = delete(User).where((User.role != RoleEnum.ADMIN) | (User.email != "admin@campus.edu"))
+            await db.execute(stmt)
+            await db.commit()
+            print("  - [CLEARED] All non-admin user accounts removed from 'users'.")
         except Exception as e:
-            print(f"  - [NOTICE] Table '{tbl}': {e}")
+            await db.rollback()
+            print(f"  - [NOTICE] Users table cleanup: {e}")
 
-    # Remove all non-admin users (all students and faculty accounts)
-    cursor.execute("DELETE FROM `users` WHERE `role` != 'ADMIN' AND `email` != 'admin@campus.edu';")
-    print("  - [CLEARED] All student and faculty user accounts removed from 'users'.")
-
-    cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
-    conn.commit()
-    conn.close()
-    print("[OK] MySQL tables wiped and foreign key constraints restored.")
+    print("[OK] Database data wiped successfully.")
 
 
 async def verify_admin_and_settings():
     """
     Ensures that the clean Super Administrator account and default settings exist.
     """
-    print("[2/3] Verifying Super Admin and default configuration...")
+    print("[2/2] Verifying Super Admin and default configuration...")
     async with AsyncSessionLocal() as db:
         admin_user = (await db.execute(select(User).where(User.email == "admin@campus.edu"))).scalar_one_or_none()
         if not admin_user:
@@ -105,38 +110,12 @@ async def verify_admin_and_settings():
             print("  - [VERIFIED] Institutional settings present.")
 
 
-def wipe_sqlite_database():
-    """
-    Wipes the local SQLite smart_attendance.db file if present.
-    """
-    print("[3/3] Checking SQLite smart_attendance.db...")
-    db_path = os.path.join(os.path.dirname(__file__), "smart_attendance.db")
-    if os.path.exists(db_path):
-        try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA foreign_keys = OFF;")
-            tables = cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';").fetchall()
-            for (tbl,) in tables:
-                cursor.execute(f"DELETE FROM \"{tbl}\";")
-                print(f"  - [SQLITE CLEARED] Table '{tbl}' wiped.")
-            cursor.execute("PRAGMA foreign_keys = ON;")
-            conn.commit()
-            conn.close()
-            print("[OK] SQLite smart_attendance.db wiped.")
-        except Exception as e:
-            print(f"[NOTICE] Error wiping SQLite database: {e}")
-    else:
-        print("  - No SQLite database file found.")
-
-
 async def main():
     print("=" * 60)
-    print("SMART ATTENDANCE: DATABASE DATA WIPE")
+    print("SMART ATTENDANCE: DATABASE DATA WIPE (DIALECT-AGNOSTIC)")
     print("=" * 60)
-    wipe_mysql_database()
+    await wipe_database_data()
     await verify_admin_and_settings()
-    wipe_sqlite_database()
     print("=" * 60)
     print("ALL DATA REMOVED SUCCESSFULLY - DATABASE IS COMPLETELY CLEAN")
     print("=" * 60)

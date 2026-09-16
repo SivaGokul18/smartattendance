@@ -6,11 +6,6 @@ from app.core.database import Base
 
 class LeaveRequest(Base):
     __tablename__ = "leave_requests"
-    __table_args__ = {
-        'mysql_engine': 'InnoDB',
-        'mysql_charset': 'utf8mb4',
-        'mysql_collate': 'utf8mb4_unicode_ci'
-    }
 
     id = Column(String(64), primary_key=True, index=True)
     student_id = Column(String(64), ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -27,7 +22,7 @@ class LeaveRequest(Base):
     document_url = Column(String(512), nullable=True)
     status = Column(String(32), default="pending", nullable=False, index=True)  # pending | approved | rejected
     review_comment = Column(Text, nullable=True)
-    applied_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    applied_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
     student = relationship("Student", back_populates="leave_requests")
@@ -36,11 +31,6 @@ class LeaveRequest(Base):
 
 class FacultyLeaveRequest(Base):
     __tablename__ = "faculty_leave_requests"
-    __table_args__ = {
-        'mysql_engine': 'InnoDB',
-        'mysql_charset': 'utf8mb4',
-        'mysql_collate': 'utf8mb4_unicode_ci'
-    }
 
     id = Column(String(64), primary_key=True, index=True)
     faculty_id = Column(String(64), ForeignKey("faculty.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -57,7 +47,7 @@ class FacultyLeaveRequest(Base):
     status = Column(String(32), default="pending", nullable=False, index=True)  # pending | approved | rejected
     review_comment = Column(Text, nullable=True)
     affected_subjects_json = Column(Text, nullable=True)
-    applied_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    applied_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
     faculty = relationship("Faculty", foreign_keys=[faculty_id])

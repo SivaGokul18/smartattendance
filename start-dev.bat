@@ -26,11 +26,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 
 timeout /t 1 /nobreak >nul
 
-echo [1/2] Launching FastAPI Backend on port 8000...
-start "Smart Attendance - FastAPI Backend" /d "%PROJECT_ROOT%\backend" powershell.exe -NoExit -Command "& '.\.venv\Scripts\uvicorn.exe' app.main:app --host 127.0.0.1 --port 8000 --reload"
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4 Address"') do (
+    set "LOCAL_IP=%%a"
+    goto :found_ip
+)
+:found_ip
+set "LOCAL_IP=%LOCAL_IP: =%"
 
-echo [2/2] Launching Vite React Frontend on port 5173...
-start "Smart Attendance - Vite Frontend" /d "%PROJECT_ROOT%" powershell.exe -NoExit -Command "npm run dev"
+echo [1/2] Launching FastAPI Backend on 0.0.0.0:8000 (accessible from phone)...
+start "Smart Attendance - FastAPI Backend" /d "%PROJECT_ROOT%\backend" powershell.exe -NoExit -Command "& '.\.venv\Scripts\uvicorn.exe' app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+echo [2/2] Launching Vite React Frontend on 0.0.0.0:5173...
+start "Smart Attendance - Vite Frontend" /d "%PROJECT_ROOT%" powershell.exe -NoExit -Command "npm run dev -- --host"
 
 echo.
 echo Waiting for servers to initialize...
@@ -39,8 +46,10 @@ start http://localhost:5173
 
 echo ===================================================
 echo  Services started successfully:
-echo  - Frontend Web UI:  http://localhost:5173
-echo  - Backend REST API: http://127.0.0.1:8000/docs
+echo  - Desktop UI:       http://localhost:5173
+echo  - Phone Mobile UI:  http://%LOCAL_IP%:5173
+echo  - Backend API:      http://localhost:8000/docs
+echo  - Phone Backend:    http://%LOCAL_IP%:8000/docs
 echo ===================================================
-timeout /t 3 >nul
+timeout /t 5 >nul
 exit

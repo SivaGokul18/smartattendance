@@ -1,5 +1,5 @@
 # Render Infrastructure Blueprint
-# Deploys Managed PostgreSQL Database and FastAPI Backend
+# Deploys FastAPI Backend connected to Supabase PostgreSQL
 services:
   - type: web
     name: smart-attendance-backend
@@ -12,9 +12,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: DATABASE_URL
-        fromDatabase:
-          name: smart-attendance-db
-          property: connectionString
+        sync: false # Set your Supabase PostgreSQL connection URI in Render Dashboard
       - key: SECRET_KEY
         generateValue: true
       - key: ALLOW_GOOGLE_AUTOPROVISION
@@ -23,9 +21,3 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
-
-databases:
-  - name: smart-attendance-db
-    plan: free
-    databaseName: smart_attendance
-    user: attendance_admin

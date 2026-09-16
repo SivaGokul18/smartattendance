@@ -228,6 +228,12 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
             except Exception:
                 await db.rollback()
     else:
+        # Resolve shorthand demo identifiers
+        if ident == "faculty":
+            ident = "faculty@campus.edu"
+        elif ident in ("student", "student@campus.edu"):
+            ident = "aarav.sharma@campus.edu"
+
         # 1. Search for matching user by email
         stmt = select(User).where(User.email.ilike(ident))
         result = await db.execute(stmt)
