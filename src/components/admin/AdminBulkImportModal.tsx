@@ -18,7 +18,8 @@ import {
   Filter,
   Check,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Link2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { adminApi } from '../../api/client';
@@ -67,6 +68,8 @@ export const AdminBulkImportModal: React.FC<AdminBulkImportModalProps> = ({
 
   // Upload & File State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [isFetchingUrl, setIsFetchingUrl] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -104,6 +107,8 @@ export const AdminBulkImportModal: React.FC<AdminBulkImportModalProps> = ({
   // Reset file and preview
   const resetUpload = () => {
     setSelectedFile(null);
+    setSheetUrl('');
+    setIsFetchingUrl(false);
     setPreviewRows([]);
     setPreviewHeaders([]);
     setPreviewStats({ total: 0, valid: 0, warning: 0, error: 0 });
@@ -111,6 +116,46 @@ export const AdminBulkImportModal: React.FC<AdminBulkImportModalProps> = ({
     setImportSummary(null);
     setPreviewPage(1);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Fetch from Google Sheet or Web CSV link
+  const handleFetchFromUrl = async () => {
+    if (!sheetUrl.trim()) {
+      setErrorMessage('Please enter a Google Sheet or CSV link.');
+      return;
+    }
+
+    setIsFetchingUrl(true);
+    setErrorMessage(null);
+    setImportSummary(null);
+
+    try {
+      const response = await adminApi.syncSheet(activeTab, sheetUrl.trim());
+      setPreviewRows(response.preview_rows || []);
+      setPreviewHeaders(
+        response.preview_rows && response.preview_rows[0]?.data
+          ? Object.keys(response.preview_rows[0].data)
+          : []
+      );
+      setPreviewStats({
+        total: response.total_rows || 0,
+        valid: response.valid_rows_count || 0,
+        warning: response.warning_rows_count || 0,
+        error: response.error_rows_count || 0,
+      });
+      setSelectedFile(new File([], `Google Sheet (${activeTab.toUpperCase()})`));
+      setPreviewPage(1);
+    } catch (err: any) {
+      console.error('Failed to sync via link:', err);
+      let detail = err.response?.data?.detail || err.message || 'Failed to fetch from Google Sheet URL.';
+      if (detail === 'Network Error') {
+        detail = 'Connection error: Unable to reach Google Sheet. Please publish it via File > Share > Publish to web > CSV, or upload the Excel file directly above.';
+      }
+      setErrorMessage(typeof detail === 'string' ? detail : JSON.stringify(detail));
+      setSelectedFile(null);
+    } finally {
+      setIsFetchingUrl(false);
+    }
   };
 
   // Download official pre-formatted Excel template
@@ -402,6 +447,7 @@ export const AdminBulkImportModal: React.FC<AdminBulkImportModalProps> = ({
 
           {/* Upload Drop Zone (when no file is selected yet) */}
           {!selectedFile && (
+            <>
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -445,6 +491,75 @@ export const AdminBulkImportModal: React.FC<AdminBulkImportModalProps> = ({
                 <span>Auto-detects Row 3 headers &amp; Roman numerals</span>
               </div>
             </div>
+
+            {/* OR PASTE GOOGLE SHEET LINK */}
+            <div className="space-y-3">
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-slate-200"></div>
+                <span className="flex-shrink mx-4 text-[11px] font-bold uppercase tracking-wider text-slate-400 bg-white px-2">
+                  OR Paste Google Sheet Link
+                </span>
+                <div className="flex-grow border-t border-slate-200"></div>
+              </div>
+
+              <div className="p-4 bg-slate-50/80 border border-slate-200/90 rounded-2xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Link2 size={14} className="text-emerald-600" />
+                    <span>Google Sheet or Web CSV Link</span>
+                  </label>
+                  <span className="text-[10px] text-slate-500">
+                    Public or Published link
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="url"
+                      placeholder="Paste Google Sheet URL (e.g. https://docs.google.com/spreadsheets/d/...)"
+                      value={sheetUrl}
+                      onChange={(e) => setSheetUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleFetchFromUrl();
+                        }
+                      }}
+                      className="w-full pl-3.5 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-mono"
+                    />
+                    {sheetUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setSheetUrl('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleFetchFromUrl}
+                    disabled={isFetchingUrl || !sheetUrl.trim()}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shrink-0 shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isFetchingUrl ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <ArrowRight size={14} />
+                    )}
+                    <span>{isFetchingUrl ? 'Fetching...' : 'Fetch & Preview'}</span>
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Tip: In Google Sheets, use <strong>File &rarr; Share &rarr; Publish to web &rarr; CSV</strong> for instant direct fetching.
+                </p>
+              </div>
+            </div>
+            </>
           )}
 
           {/* Selected File & Preview Section */}

@@ -23,7 +23,8 @@ import {
   Users,
   GraduationCap,
   Sparkles,
-  Info
+  Info,
+  Upload
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { adminApi } from '../../api/client';
@@ -103,6 +104,8 @@ export const AdminSheetSyncModal: React.FC<AdminSheetSyncModalProps> = ({
   const [autoApply, setAutoApply] = useState(false);
 
   // Status & Loading states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [isLoadingConfigs, setIsLoadingConfigs] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -229,6 +232,40 @@ export const AdminSheetSyncModal: React.FC<AdminSheetSyncModalProps> = ({
       }
     } finally {
       setIsSavingConfig(false);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!file.name.match(/\.(xlsx|xls|csv)$/i)) {
+      setErrorMessage('Please upload a valid spreadsheet file (.xlsx, .xls, or .csv)');
+      return;
+    }
+
+    setIsUploadingFile(true);
+    setErrorMessage(null);
+    setApplyResult(null);
+
+    try {
+      const response = await adminApi.previewImport(file, activeTab);
+      setPreviewRows(response.preview_rows || []);
+      setMissingRows([]);
+      setPreviewStats({
+        total: response.total_rows || 0,
+        valid: response.valid_rows_count || 0,
+        warning: response.warning_rows_count || 0,
+        error: response.error_rows_count || 0,
+        create: response.valid_rows_count || 0,
+        update: 0,
+        missing: 0,
+      });
+      setCurrentPage(1);
+    } catch (err: any) {
+      console.error('File upload preview error:', err);
+      const detail = err.response?.data?.detail || err.message || 'Failed to parse file. Please verify columns match the template.';
+      setErrorMessage(typeof detail === 'string' ? detail : JSON.stringify(detail));
+    } finally {
+      setIsUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -592,6 +629,43 @@ export const AdminSheetSyncModal: React.FC<AdminSheetSyncModalProps> = ({
                   placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv"
                   className="w-full text-xs pl-10 pr-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition font-mono"
                 />
+              </div>
+
+              {/* OR UPLOAD LOCAL FILE DIRECTLY */}
+              <div className="pt-2 space-y-2">
+                <div className="relative flex py-1 items-center">
+                  <div className="flex-grow border-t border-slate-200"></div>
+                  <span className="flex-shrink mx-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-white px-2">
+                    OR Upload Local Spreadsheet File (.xlsx / .csv)
+                  </span>
+                  <div className="flex-grow border-t border-slate-200"></div>
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx, .xls, .csv"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handleFileUpload(e.target.files[0]);
+                    }
+                  }}
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingFile || isSyncing}
+                  className="w-full py-2.5 px-3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50/70 hover:bg-emerald-50/30 text-slate-600 hover:text-emerald-800 transition flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer disabled:opacity-50"
+                >
+                  {isUploadingFile ? (
+                    <Loader2 size={15} className="animate-spin text-emerald-600" />
+                  ) : (
+                    <Upload size={15} className="text-emerald-600" />
+                  )}
+                  <span>{isUploadingFile ? 'Parsing File...' : 'Choose Excel (.xlsx) or CSV File from Computer'}</span>
+                </button>
               </div>
             </div>
 
